@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
 import '../../views/home/components/alarm_info_section.dart';
 
 class HomeController extends GetxController with AlarmAnimationController, GetSingleTickerProviderStateMixin {
-  final scaffoldKey = GlobalKey<ScaffoldState>();
+  static HomeController get instance => Get.find<HomeController>();
+  late final GlobalKey<ScaffoldState> scaffoldKey;
   final Rx<DateTime> currentTime = DateTime.now().obs;
   final RxString wakeUpTime = ''.obs;
 
   @override
   void onInit() {
+    scaffoldKey = GlobalKey<ScaffoldState>();
     super.onInit();
     initializeAnimations(this);
     addButtonController.forward();
     updateWakeUpTime();
+  }
+
+  void openDrawer(BuildContext context) {
+    Scaffold.of(context).openDrawer();
   }
 
   void updateWakeUpTime() {

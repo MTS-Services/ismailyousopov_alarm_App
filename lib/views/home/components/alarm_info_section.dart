@@ -1,3 +1,4 @@
+import 'package:alarm/core/constants/asset_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,20 +11,19 @@ class AlarmInfoSection extends StatelessWidget {
   final Animation<double>? addButtonAnimation;
 
   const AlarmInfoSection({
-    Key? key,
+    super.key,
     required this.alarmTime,
     required this.wakeUpIn,
     required this.onEditAlarms,
     required this.onAddAlarm,
     this.addButtonAnimation,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Alarm Info Texts
         Text(
           'Alarm set for',
           style: GoogleFonts.inter(
@@ -43,13 +43,11 @@ class AlarmInfoSection extends StatelessWidget {
         Text(
           wakeUpIn,
           style: GoogleFonts.inter(
-            color: const Color(0xFF811F3E),
+            color: Theme.of(context).primaryColor,
             letterSpacing: 0.0,
           ),
         ),
         const SizedBox(height: 16),
-
-        // Edit Alarms Button
         SizedBox(
           width: MediaQuery.of(context).size.width,
           height: 56,
@@ -78,7 +76,6 @@ class AlarmInfoSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Add Alarm Button
         Align(
           alignment: const AlignmentDirectional(0, 0),
           child: Material(
@@ -91,7 +88,7 @@ class AlarmInfoSection extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF811F3E),
+                color: Theme.of(context).primaryColor,
                 borderRadius: BorderRadius.circular(28),
               ),
               child: InkWell(
@@ -99,7 +96,7 @@ class AlarmInfoSection extends StatelessWidget {
                 focusColor: Colors.transparent,
                 hoverColor: Colors.transparent,
                 highlightColor: Colors.transparent,
-                onTap:  () => Get.toNamed('/alarm-set'),
+                onTap:  () => Get.toNamed(AppConstants.setAlarm),
                 child: const Icon(
                   Icons.add,
                   color: Colors.white,

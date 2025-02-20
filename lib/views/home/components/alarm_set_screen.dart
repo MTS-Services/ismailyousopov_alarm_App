@@ -1,9 +1,10 @@
-import 'package:alarm/views/home/home_screen.dart';
+import 'package:alarm/core/constants/asset_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AlarmSetScreen extends StatefulWidget {
-  const AlarmSetScreen({Key? key}) : super(key: key);
+  const AlarmSetScreen({super.key});
 
   @override
   State<AlarmSetScreen> createState() => _AlarmSetScreenState();
@@ -36,7 +37,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: Material(
                     elevation: 4,
-                    shape: CircleBorder(),
+                    shape: const CircleBorder(),
                     child: Container(
                       width: 300,
                       height: 300,
@@ -77,22 +78,20 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                       ),
                       child: Column(
                         children: [
-                          // NFC Switch Row
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
-                                  Icon(
+                                   Icon(
                                     Icons.nfc,
-                                    color: Color(0xFF811F3E),
+                                    color: Theme.of(context).primaryColor,
                                     size: 24,
                                   ),
-                                  SizedBox(width: 12),
+                                  const SizedBox(width: 12),
                                   Text(
                                     'Enable NFC',
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
+                                    style: GoogleFonts.inter(
                                       fontSize: 16,
                                     ),
                                   ),
@@ -108,34 +107,33 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
                           // Sound Selection Row
                           InkWell(
                             onTap: () {
-                              Get.toNamed('/alarm-sound');
+                              Get.toNamed(AppConstants.alarmSounds);
                             },
-                            child: const Row(
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Row(
                                   children: [
                                     Icon(
                                       Icons.music_note,
-                                      color: Color(0xFF811F3E),
+                                      color: Theme.of(context).primaryColor,
                                       size: 24,
                                     ),
-                                    SizedBox(width: 12),
+                                    const SizedBox(width: 12),
                                     Text(
                                       'Choose Sound',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
+                                      style: GoogleFonts.inter(
                                         fontSize: 16,
                                       ),
                                     ),
                                   ],
                                 ),
-                                Icon(
+                                const Icon(
                                   Icons.chevron_right,
                                   color: Colors.grey,
                                   size: 24,
@@ -159,11 +157,11 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                       // Cancel Button
                       ElevatedButton(
                         onPressed: () {
-                          Get.to(const HomeScreen());
+                          Get.toNamed(AppConstants.home);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF811F3E),
-                          fixedSize: Size(125, 50),
+                          backgroundColor: Theme.of(context).primaryColor,
+                          fixedSize: const Size(125, 50),
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25),
@@ -172,10 +170,9 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                             ),
                           ),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Cancel',
-                          style: TextStyle(
-                            fontFamily: 'Inter Tight',
+                          style: GoogleFonts.interTight(
                             color: Colors.white,
                           ),
                         ),
@@ -184,11 +181,11 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                       // Save Button
                       ElevatedButton(
                         onPressed: () {
-                          Get.to(const HomeScreen());
+                          Get.toNamed(AppConstants.home);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
-                          fixedSize: Size(125, 50),
+                          fixedSize: const Size(125, 50),
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25),
@@ -197,10 +194,9 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                             ),
                           ),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Save',
-                          style: TextStyle(
-                            fontFamily: 'Inter Tight',
+                          style: GoogleFonts.interTight(
                             color: Colors.black,
                           ),
                         ),

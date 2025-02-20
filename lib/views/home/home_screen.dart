@@ -1,3 +1,4 @@
+import 'package:alarm/core/constants/asset_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -8,23 +9,23 @@ import 'components/analogue_clock.dart';
 import 'components/custom_navigation_bar.dart';
 
 
-class HomeScreen extends GetView<HomeController> {
-  const HomeScreen({super.key});
+class HomeScreen extends StatelessWidget {
+  final controller = Get.put(HomeController());
+
+  HomeScreen({super.key});
+
 
   @override
   Widget build(BuildContext context) {
-    final HomeController controller = Get.put(HomeController());
     return Scaffold(
-      key: controller.scaffoldKey,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawer: const CustomDrawer(),
       body: SafeArea(
         child: Column(
           children: [
             CustomNavigationBar(
-              scaffoldKey: controller.scaffoldKey,
+              onMenuTap: () => controller.openDrawer(context),
             ),
-
-            // Main Content
             Expanded(
               child: SingleChildScrollView(
                 child: Padding(
@@ -34,8 +35,6 @@ class HomeScreen extends GetView<HomeController> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const SizedBox(height: 20),
-
-                      // Clock Section
                       const Visibility(
                         visible: true,
                         child: ClipRRect(
@@ -49,15 +48,12 @@ class HomeScreen extends GetView<HomeController> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 40),
-
-                      // Alarm Info Section
                       Obx(() => AlarmInfoSection(
                         alarmTime: '12:06',
                         wakeUpIn: controller.wakeUpTime.value,
-                        onEditAlarms: () => Get.toNamed('/alarm-history'),
-                        onAddAlarm: () => Get.toNamed('/alarm-set'),
+                        onEditAlarms: () => Get.toNamed(AppConstants.alarmHistory),
+                        onAddAlarm: () => Get.toNamed(AppConstants.setAlarm),
                         addButtonAnimation: controller.addButtonAnimation,
                       )),
                     ],

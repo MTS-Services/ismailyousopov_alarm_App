@@ -1,6 +1,6 @@
 # alarm
 
-A new Flutter project.
+An alarm app.
 
 ## Getting Started
 

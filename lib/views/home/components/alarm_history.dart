@@ -1,6 +1,9 @@
+import 'package:alarm/core/constants/asset_constants.dart';
 import 'package:alarm/views/home/home_screen.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AlarmHistoryWidget extends StatefulWidget {
   const AlarmHistoryWidget({super.key});
@@ -32,13 +35,12 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
               size: 35,
             ),
             onPressed: () {
-              Get.to(HomeScreen());
+              Get.toNamed(AppConstants.home);
             },
           ),
           title: Text(
             'Alarm History',
-            style: TextStyle(
-              fontFamily: 'Inter Tight',
+            style: GoogleFonts.interTight(
               color: Theme.of(context).textTheme.bodyLarge?.color,
               fontSize: 24,
               fontWeight: FontWeight.w600,
@@ -62,7 +64,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
                       child: Container(
                         width: MediaQuery.of(context).size.width,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF811F3E),
+                          color: Theme.of(context).primaryColor,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Padding(
@@ -74,8 +76,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
                                 padding: const EdgeInsets.only(left: 22),
                                 child: Text(
                                   time,
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter Tight',
+                                  style: GoogleFonts.interTight(
                                     color: Colors.white,
                                     fontSize: 35,
                                   ),
@@ -85,7 +86,9 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
                                 children: [
                                   ElevatedButton(
                                     onPressed: () {
-                                      print('Delete button pressed...');
+                                      if (kDebugMode) {
+                                        print('Delete button pressed...');
+                                      }
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.black,
@@ -108,7 +111,9 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
                                   const SizedBox(width: 8),
                                   ElevatedButton(
                                     onPressed: () {
-                                      print('Use button pressed...');
+                                      if (kDebugMode) {
+                                        print('Use button pressed...');
+                                      }
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.white,

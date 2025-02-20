@@ -1,14 +1,18 @@
+import 'package:alarm/core/constants/asset_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-class CustomNavigationBar extends StatelessWidget {
-  final GlobalKey<ScaffoldState>? scaffoldKey;
+import '../../../controllers/home/home_controller.dart';
 
-  const CustomNavigationBar({
-    Key? key,
-    this.scaffoldKey,
-  }) : super(key: key);
+class CustomNavigationBar extends StatelessWidget {
+  final controller = Get.put(HomeController());
+  final VoidCallback onMenuTap;
+
+  CustomNavigationBar({
+    required this.onMenuTap,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -56,22 +60,22 @@ class CustomNavigationBar extends StatelessWidget {
                   _buildNavItem(
                     icon: Icons.access_time_outlined,
                     size: 26,
-                    onTap: () => Get.toNamed('/main-page'),
+                    onTap: () => Get.toNamed(AppConstants.home),
                   ),
                   _buildNavItem(
                     icon: Icons.nfc_outlined,
                     size: 25,
-                    onTap: () => Get.toNamed('/nfc-scan'),
+                    onTap: () => Get.toNamed(AppConstants.nfcScan),
                   ),
                   _buildNavItem(
                     icon: Icons.query_stats_outlined,
                     size: 28,
-                    onTap: () => Get.toNamed('/statistics'),
+                    onTap: () => Get.toNamed(AppConstants.sleepHistory),
                   ),
                   _buildNavItem(
                     icon: FontAwesomeIcons.bars,
                     size: 22,
-                    onTap: () => scaffoldKey?.currentState?.openDrawer(),
+                    onTap: () =>  controller.openDrawer(context),
                   ),
                 ],
               ),

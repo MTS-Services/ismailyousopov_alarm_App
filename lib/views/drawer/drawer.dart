@@ -1,26 +1,31 @@
+import 'package:alarm/views/onboarding/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../core/constants/asset_constants.dart';
 
 class CustomDrawer extends StatelessWidget {
-  const CustomDrawer({Key? key}) : super(key: key);
+  const CustomDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 305,
       child: Drawer(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 14,
         child: Column(
           mainAxisSize: MainAxisSize.max,
           children: [
             Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(0, 59, 0, 0),
+              padding: const EdgeInsetsDirectional.fromSTEB(0, 59, 0, 0),
               child: Row(
                 mainAxisSize: MainAxisSize.max,
                 children: [
                   Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(22, 0, 0, 0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(22, 0, 0, 0),
                     child: Container(
                       width: 120,
                       height: 100,
@@ -30,17 +35,17 @@ class CustomDrawer extends StatelessWidget {
                       ),
                       child: InkWell(
                         onTap: () {
-                          Navigator.pushNamed(context, 'NFC-SETTINGS');
+                          Get.toNamed(AppConstants.nfcSettings);
                         },
-                        child: const Stack(
+                        child: Stack(
                           children: [
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: Icon(
                                   Icons.nfc_rounded,
-                                  color: Color(0xFF811F3E),
+                                  color: Theme.of(context).primaryColor,
                                   size: 35,
                                 ),
                               ),
@@ -48,12 +53,11 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: Text(
                                   'NFC',
-                                  style: TextStyle(
+                                  style: GoogleFonts.inter(
                                     color: Colors.white,
-                                    fontFamily: 'Inter',
                                   ),
                                 ),
                               ),
@@ -64,7 +68,7 @@ class CustomDrawer extends StatelessWidget {
                     ),
                   ),
                   Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(6, 0, 0, 0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(6, 0, 0, 0),
                     child: Container(
                       width: 120,
                       height: 100,
@@ -74,17 +78,17 @@ class CustomDrawer extends StatelessWidget {
                       ),
                       child: InkWell(
                         onTap: () {
-                          Navigator.pushNamed(context, 'Alaram-Sounds');
+                          Get.toNamed(AppConstants.alarmSounds);
                         },
                         child: Stack(
                           children: [
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: FaIcon(
                                   FontAwesomeIcons.music,
-                                  color: Color(0xFF811F3E),
+                                  color: Theme.of(context).primaryColor,
                                   size: 35,
                                 ),
                               ),
@@ -92,12 +96,11 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: Text(
                                   'Alarm',
-                                  style: TextStyle(
+                                  style: GoogleFonts.inter(
                                     color: Colors.white,
-                                    fontFamily: 'Inter',
                                   ),
                                 ),
                               ),
@@ -111,12 +114,12 @@ class CustomDrawer extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(0, 6, 0, 0),
+              padding: const EdgeInsetsDirectional.fromSTEB(0, 6, 0, 0),
               child: Row(
                 mainAxisSize: MainAxisSize.max,
                 children: [
                   Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(22, 0, 0, 0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(22, 0, 0, 0),
                     child: Container(
                       width: 120,
                       height: 100,
@@ -125,18 +128,16 @@ class CustomDrawer extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: InkWell(
-                        onTap: () {
-                          // Language setting functionality
-                        },
+                        onTap: () {},
                         child: Stack(
                           children: [
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: Icon(
                                   Icons.public,
-                                  color: Color(0xFF811F3E),
+                                  color: Theme.of(context).primaryColor,
                                   size: 35,
                                 ),
                               ),
@@ -144,12 +145,11 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: Text(
                                   'Language',
-                                  style: TextStyle(
+                                  style: GoogleFonts.inter(
                                     color: Colors.white,
-                                    fontFamily: 'Inter',
                                   ),
                                 ),
                               ),
@@ -160,7 +160,7 @@ class CustomDrawer extends StatelessWidget {
                     ),
                   ),
                   Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(6, 0, 0, 0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(6, 0, 0, 0),
                     child: Container(
                       width: 120,
                       height: 100,
@@ -170,17 +170,17 @@ class CustomDrawer extends StatelessWidget {
                       ),
                       child: InkWell(
                         onTap: () {
-                          Navigator.pushNamed(context, 'Statistics');
+                          Get.toNamed(AppConstants.sleepHistory);
                         },
                         child: Stack(
                           children: [
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: Icon(
                                   Icons.query_stats_rounded,
-                                  color: Color(0xFF811F3E),
+                                  color: Theme.of(context).primaryColor,
                                   size: 35,
                                 ),
                               ),
@@ -188,12 +188,11 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
                                 child: Text(
                                   'Statistics',
-                                  style: TextStyle(
+                                  style: GoogleFonts.inter(
                                     color: Colors.white,
-                                    fontFamily: 'Inter',
                                   ),
                                 ),
                               ),
@@ -206,49 +205,47 @@ class CustomDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            Divider(
+            const Divider(
               thickness: 2,
               color: Color(0xFFCBCED6),
             ),
             ListTile(
-              leading: Icon(Icons.info_outlined),
+              leading: const Icon(Icons.info_outlined),
               title: Text(
                 'About the app',
-                style: TextStyle(
-                  fontFamily: 'Inter',
+                style: GoogleFonts.inter(
                   fontSize: 20,
                 ),
               ),
-              onTap: () => Navigator.pushNamed(context, 'ABOUTAPP'),
+              onTap: () {
+                Get.to(const OnboardingScreen(isFromAboutSection: true,));
+              },
             ),
             ListTile(
-              leading: Icon(Icons.update),
+              leading: const Icon(Icons.update),
               title: Text(
                 'App version',
-                style: TextStyle(
-                  fontFamily: 'Inter',
+                style: GoogleFonts.inter(
                   fontSize: 20,
                 ),
               ),
-              onTap: () => Navigator.pushNamed(context, 'Uppdate-Info'),
+              onTap: () => Get.toNamed(AppConstants.appVersion),
             ),
             ListTile(
-              leading: Icon(Icons.polyline_sharp),
+              leading: const Icon(Icons.polyline_sharp),
               title: Text(
                 'Terms and Conditions',
-                style: TextStyle(
-                  fontFamily: 'Inter',
+                style: GoogleFonts.inter(
                   fontSize: 20,
                 ),
               ),
               onTap: () {},
             ),
             ListTile(
-              leading: FaIcon(FontAwesomeIcons.handsHelping),
+              leading: const FaIcon(FontAwesomeIcons.handsHelping),
               title: Text(
                 'Help',
-                style: TextStyle(
-                  fontFamily: 'Inter',
+                style: GoogleFonts.inter(
                   fontSize: 20,
                 ),
               ),

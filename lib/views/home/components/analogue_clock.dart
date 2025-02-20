@@ -11,13 +11,13 @@ class AnalogClock extends StatefulWidget {
   final Color secondHandColor;
 
   const AnalogClock({
-    Key? key,
+    super.key,
     this.size = 300,
     this.backgroundColor = Colors.white,
     this.numberColor = Colors.black,
     this.handColor = Colors.black,
     this.secondHandColor = Colors.red,
-  }) : super(key: key);
+  });
 
   @override
   State<AnalogClock> createState() => _AnalogClockState();

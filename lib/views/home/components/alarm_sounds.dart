@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 class AlarmSoundsWidget extends StatefulWidget {
   const AlarmSoundsWidget({super.key});
@@ -11,7 +13,6 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   int? selectedBubbleIndex;
 
-  // Define bubble configurations for easy management
   final List<Map<String, dynamic>> bubbleConfigs = [
     {
       'alignment': const Alignment(-0.52, -0.64),
@@ -28,7 +29,7 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
     {
       'alignment': const Alignment(0.98, -0.19),
       'size': 109.0,
-      'colors': [null, Colors.black], // null will be replaced with theme color
+      'colors': [null, Colors.black],
       'soundId': 3,
     },
     {
@@ -144,7 +145,9 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                   onPressed: selectedBubbleIndex != null
                                       ? () {
                                     final selectedSoundId = bubbleConfigs[selectedBubbleIndex!]['soundId'];
-                                    print('Selected sound ID: $selectedSoundId');
+                                    if (kDebugMode) {
+                                      print('Selected sound ID: $selectedSoundId');
+                                    }
                                     Navigator.of(context).pop(selectedSoundId);
                                   }
                                       : null,
@@ -157,7 +160,9 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                       ),
                                     ),
                                   ),
-                                  child: const Text('Select'),
+                                  child: const Text('Select',style: TextStyle(
+                                    color: Colors.white
+                                  ),),
                                 ),
                               ),
                             ),
@@ -176,7 +181,7 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                     color: Theme.of(context).textTheme.bodyLarge?.color,
                     size: 35,
                   ),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => Get.back(),
                 ),
               ),
             ],
@@ -220,7 +225,7 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
               shape: BoxShape.circle,
               border: isSelected
                   ? Border.all(
-                color: Color(0xff811f3e),
+                color: Theme.of(context).primaryColor,
                 width: 3,
               )
                   : null,
