@@ -12,6 +12,7 @@ class NfcSettingsWidget extends StatefulWidget {
 
 class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
+  bool isNfcAdded = true;
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +176,7 @@ class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Remove NFC tag',
+                                      isNfcAdded ? 'Remove NFC tag' : 'Add NFC tag',
                                       style: GoogleFonts.interTight(
                                         color: Colors.black,
                                         fontSize: 24,
@@ -183,7 +184,7 @@ class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
                                       ),
                                     ),
                                     Text(
-                                      'Delete existing NFC tag',
+                                      isNfcAdded ? 'Delete existing NFC tag' : 'Add new NFC tag',
                                       style: GoogleFonts.inter(
                                         color: Colors.black,
                                         fontWeight: FontWeight.w400,
@@ -197,12 +198,12 @@ class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
                                   width: 50,
                                   height: 50,
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).primaryColor,
+                                    color: isNfcAdded ? Theme.of(context).primaryColor : const Color(0xFFFFDE59),
                                     borderRadius: BorderRadius.circular(30),
                                   ),
-                                  child: const Icon(
-                                    Icons.remove_circle,
-                                    color: Colors.white,
+                                  child: Icon(
+                                    isNfcAdded ? Icons.remove_circle : Icons.add_circle,
+                                    color: isNfcAdded ? Colors.white : Colors.black,
                                     size: 30,
                                   ),
                                 ),
@@ -211,12 +212,15 @@ class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
                             const SizedBox(height: 16),
                             ElevatedButton(
                               onPressed: () {
+                                setState(() {
+                                  isNfcAdded = !isNfcAdded;
+                                });
                                 if (kDebugMode) {
-                                  print('Remove button pressed');
+                                  print(isNfcAdded ? 'NFC Added' : 'NFC Removed');
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).primaryColor,
+                                backgroundColor: isNfcAdded ? Theme.of(context).primaryColor : const Color(0xFFFFDE59),
                                 minimumSize: Size(MediaQuery.of(context).size.width, 50),
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -224,9 +228,9 @@ class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
                                 ),
                               ),
                               child: Text(
-                                'Remove',
+                                isNfcAdded ? 'Remove' : 'Add NFC',
                                 style: GoogleFonts.interTight(
-                                  color: Colors.white,
+                                  color: isNfcAdded ? Colors.white : Colors.black,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600
                                 ),

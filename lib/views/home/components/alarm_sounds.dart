@@ -112,7 +112,7 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                   borderRadius: BorderRadius.circular(21),
                                 ),
                                 child: Container(
-                                  width: 192,
+                                  width: 205,
                                   height: 42,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF020202),
@@ -123,15 +123,15 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                   ),
                                   child: const Center(
                                     child: Padding(
-                                      padding: EdgeInsets.only(left: 9),
-                                      child: Text(
-                                        'Press any bubble',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
+                                      padding: EdgeInsets.only(left: 0, right: 0, top: 0, bottom: 0),
+                                        child: Text(
+                                          'Press any bubble',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
                                     ),
                                   ),
                                 ),
@@ -210,7 +210,7 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
         },
         child: Material(
           color: Colors.transparent,
-          elevation: 2,
+          elevation: 8,
           shape: const CircleBorder(),
           child: Container(
             width: size,
@@ -222,12 +222,20 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                 begin: const Alignment(0, -1),
                 end: const Alignment(0, 1),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: isSelected ? Colors.red.withOpacity(0.7) : Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                  spreadRadius: 4,
+                  offset: const Offset(0, 3),
+                ),
+              ],
               shape: BoxShape.circle,
               border: isSelected
                   ? Border.all(
-                color: Theme.of(context).primaryColor,
-                width: 3,
-              )
+                      color: Theme.of(context).primaryColor.withOpacity(0.5),
+                      width: 2,
+                    )
                   : null,
             ),
           ),
