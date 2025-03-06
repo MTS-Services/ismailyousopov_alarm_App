@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../controllers/alarm/alarm_controller.dart';
+
 class AlarmSoundsWidget extends StatefulWidget {
   const AlarmSoundsWidget({super.key});
 
@@ -10,6 +12,7 @@ class AlarmSoundsWidget extends StatefulWidget {
 }
 
 class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
+  final AlarmController _alarmController = Get.find<AlarmController>();
   final scaffoldKey = GlobalKey<ScaffoldState>();
   int? selectedBubbleIndex;
 
@@ -19,50 +22,74 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
       'size': 83.0,
       'colors': [const Color(0xFFEE20D0), null],
       'soundId': 1,
+      'soundPath': 'alarm_sounds/1.wav',
     },
     {
       'alignment': const Alignment(0.66, -0.57),
       'size': 120.0,
       'colors': [const Color(0xFF4b39ef), null],
       'soundId': 2,
+      'soundPath': 'alarm_sounds/2.wav',
     },
     {
       'alignment': const Alignment(0.98, -0.19),
       'size': 109.0,
       'colors': [null, Colors.black],
       'soundId': 3,
+      'soundPath': 'alarm_sounds/3.wav',
     },
     {
       'alignment': const Alignment(-0.96, -0.25),
       'size': 100.0,
       'colors': [Colors.green, null],
       'soundId': 4,
+      'soundPath': 'alarm_sounds/4.wav',
     },
     {
       'alignment': const Alignment(0.11, -0.01),
       'size': 78.0,
       'colors': [Colors.red, null],
       'soundId': 5,
+      'soundPath': 'alarm_sounds/5.wav',
     },
     {
       'alignment': const Alignment(0, -0.27),
       'size': 92.0,
       'colors': [const Color(0xFF620A0B), const Color(0xFF40404D)],
       'soundId': 6,
+      'soundPath': 'alarm_sounds/6.wav',
     },
     {
       'alignment': const Alignment(-0.92, 0.14),
       'size': 121.0,
       'colors': [const Color(0xFF006039), Colors.amber],
       'soundId': 7,
+      'soundPath': 'alarm_sounds/7.wav',
     },
     {
       'alignment': const Alignment(0.61, 0.23),
       'size': 83.0,
       'colors': [null, Colors.green],
       'soundId': 8,
+      'soundPath': 'alarm_sounds/8.wav',
     },
   ];
+
+  @override
+  void dispose() {
+    _alarmController.stopAlarmSound();
+    super.dispose();
+  }
+
+  Future<void> _playSoundPreview(int soundId) async {
+    try {
+      await _alarmController.playAlarmSound(soundId, isPreview: true);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error playing sound preview: $e');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,14 +151,14 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                   child: const Center(
                                     child: Padding(
                                       padding: EdgeInsets.only(left: 0, right: 0, top: 0, bottom: 0),
-                                        child: Text(
-                                          'Press any bubble',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                      child: Text(
+                                        'Press any bubble',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
                                         ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -148,6 +175,8 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                     if (kDebugMode) {
                                       print('Selected sound ID: $selectedSoundId');
                                     }
+
+                                    _alarmController.stopAlarmSound();
                                     Navigator.of(context).pop(selectedSoundId);
                                   }
                                       : null,
@@ -160,9 +189,10 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                       ),
                                     ),
                                   ),
-                                  child: const Text('Select',style: TextStyle(
-                                    color: Colors.white
-                                  ),),
+                                  child: const Text(
+                                    'Select',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
                                 ),
                               ),
                             ),
@@ -181,7 +211,10 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                     color: Theme.of(context).textTheme.bodyLarge?.color,
                     size: 35,
                   ),
-                  onPressed: () => Get.back(),
+                  onPressed: () {
+                    _alarmController.stopAlarmSound();
+                    Get.back();
+                  },
                 ),
               ),
             ],
@@ -207,6 +240,9 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
           setState(() {
             selectedBubbleIndex = index;
           });
+
+          // Play sound preview when bubble is tapped
+          _playSoundPreview(bubbleConfigs[index]['soundId']);
         },
         child: Material(
           color: Colors.transparent,
@@ -233,9 +269,9 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
               shape: BoxShape.circle,
               border: isSelected
                   ? Border.all(
-                      color: Theme.of(context).primaryColor.withOpacity(0.5),
-                      width: 2,
-                    )
+                color: Theme.of(context).primaryColor.withOpacity(0.5),
+                width: 2,
+              )
                   : null,
             ),
           ),

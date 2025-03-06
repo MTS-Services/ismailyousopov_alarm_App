@@ -5,22 +5,37 @@ import 'package:alarm/views/home/components/app_version.dart';
 import 'package:alarm/views/home/components/key.dart';
 import 'package:alarm/views/home/components/nfc_scan.dart';
 import 'package:alarm/views/home/components/nfc_settings.dart';
+import 'package:alarm/views/home/components/notification_service.dart';
 import 'package:alarm/views/home/components/sleep_history.dart';
 import 'package:alarm/views/home/components/stop_alarm.dart';
 import 'package:alarm/views/home/home_screen.dart';
 import 'package:alarm/views/onboarding/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'core/constants/asset_constants.dart';
 import 'core/theme/app_theme.dart';
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _requestNotificationPermission();
+  await NotificationService.initialize();
   runApp(const MyApp());
 }
 
+
+Future<void> _requestNotificationPermission() async {
+  final status = await Permission.notification.request();
+  if (status.isGranted) {
+    debugPrint('Notification permission granted');
+  } else {
+    debugPrint('Notification permission denied');
+  }
+}
+
 class MyApp extends StatelessWidget {
-  const MyApp({super.key,});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {

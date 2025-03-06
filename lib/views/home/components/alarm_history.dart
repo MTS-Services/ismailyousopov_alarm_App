@@ -1,5 +1,4 @@
 import 'package:alarm/core/constants/asset_constants.dart';
-import 'package:alarm/views/home/home_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
