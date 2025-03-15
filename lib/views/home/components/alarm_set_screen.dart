@@ -1,10 +1,13 @@
+import 'package:alarm/views/home/components/scan_nfc.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
+import '../../../controllers/nfc/nfc_controller.dart';
 import '../../../models/alarm/alarm_model.dart';
 import '../../../core/constants/asset_constants.dart';
-import 'sound_manager.dart';
+import '../../../core/services/sound_manager.dart';
 
 class AlarmSetScreen extends StatefulWidget {
   const AlarmSetScreen({super.key});
@@ -17,72 +20,71 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
   final AlarmController _alarmController = Get.put(AlarmController());
   bool _nfcEnabled = false;
   int _selectedSoundId = 1;
-  TimeOfDay _selectedTime = TimeOfDay.now();
+  DateTime _selectedDateTime = DateTime.now();
   final scaffoldKey = GlobalKey<ScaffoldState>();
   String _selectedSoundName = SoundManager.getSoundName(1);
+  AlarmModel? _editingAlarm;
+  bool _isEditing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Get.arguments != null && Get.arguments is AlarmModel) {
+      _editingAlarm = Get.arguments as AlarmModel;
+      _isEditing = true;
+      _selectedDateTime = _editingAlarm!.time;
+      _selectedSoundId = _editingAlarm!.soundId;
+      _selectedSoundName = SoundManager.getSoundName(_selectedSoundId);
+      _nfcEnabled = _editingAlarm!.nfcRequired;
+    }
+  }
 
   @override
   void dispose() {
-    // Stop any playing sound when leaving the screen
     _alarmController.stopAlarmSound();
     super.dispose();
   }
 
-  Future<void> _selectTime(BuildContext context) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            timePickerTheme: TimePickerThemeData(
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-              hourMinuteTextColor: Colors.white,
-              dialHandColor: Theme.of(context).primaryColor,
-              dialBackgroundColor: Colors.grey[800],
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedTime = picked);
-    }
-  }
-
+  /// save alarm
   Future<void> _saveAlarm() async {
-    // Stop any playing preview sound
     _alarmController.stopAlarmSound();
-
     final now = DateTime.now();
     DateTime selectedDateTime = DateTime(
       now.year,
       now.month,
       now.day,
-      _selectedTime.hour,
-      _selectedTime.minute,
+      _selectedDateTime.hour,
+      _selectedDateTime.minute,
     );
 
-    print('Current Time: $now');
-    print('Selected Time: $selectedDateTime');
-    print(_selectedSoundId);
-
-    // If the selected time is in the past, schedule for the next day
-    if (selectedDateTime.isBefore(now)) {
+    if (selectedDateTime.isBefore(now) &&
+        (_editingAlarm == null || _editingAlarm!.daysActive.isEmpty)) {
       selectedDateTime = selectedDateTime.add(const Duration(days: 1));
-      print('Adjusted Selected Time (next day): $selectedDateTime');
     }
 
-    final newAlarm = AlarmModel(
-      time: selectedDateTime,
-      isEnabled: true,
-      soundId: _selectedSoundId,
-      nfcRequired: _nfcEnabled,
-      daysActive: [],
-    );
+    if (_isEditing) {
+      final updatedAlarm = AlarmModel(
+        id: _editingAlarm!.id,
+        time: selectedDateTime,
+        isEnabled: true,
+        soundId: _selectedSoundId,
+        nfcRequired: _nfcEnabled,
+        daysActive: _editingAlarm!.daysActive,
+      );
 
-    await _alarmController.createAlarm(newAlarm);
+      await _alarmController.updateAlarm(updatedAlarm);
+    } else {
+      final newAlarm = AlarmModel(
+        time: selectedDateTime,
+        isEnabled: true,
+        soundId: _selectedSoundId,
+        nfcRequired: _nfcEnabled,
+        daysActive: [],
+      );
+
+      await _alarmController.createAlarm(newAlarm);
+    }
+
     Get.back();
   }
 
@@ -104,7 +106,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
             },
           ),
           title: Text(
-            'Set Alarm',
+            _isEditing ? 'Edit Alarm' : 'Set Alarm',
             style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -120,38 +122,196 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const SizedBox(height: 20),
-                  // Time Selection Circle
-                  GestureDetector(
-                    onTap: () => _selectTime(context),
-                    child: Container(
-                      width: 300,
-                      height: 300,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          _selectedTime.format(context),
-                          style: const TextStyle(
-                            fontFamily: 'Inter Tight',
-                            fontSize: 48,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
+                  Container(
+                    width: 300,
+                    height: 300,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          height: 200,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Hour Picker
+                              SizedBox(
+                                width: 70,
+                                child: CupertinoPicker(
+                                  magnification: 1.2,
+                                  squeeze: 1.2,
+                                  useMagnifier: true,
+                                  itemExtent: 40,
+                                  looping: MediaQuery.of(context)
+                                          .alwaysUse24HourFormat
+                                      ? false
+                                      : true,
+                                  onSelectedItemChanged: (int index) {
+                                    setState(() {
+                                      _selectedDateTime = DateTime(
+                                        _selectedDateTime.year,
+                                        _selectedDateTime.month,
+                                        _selectedDateTime.day,
+                                        MediaQuery.of(context)
+                                                .alwaysUse24HourFormat
+                                            ? index
+                                            : (index % 12) +
+                                                (_selectedDateTime.hour >= 12
+                                                    ? 12
+                                                    : 0),
+                                        _selectedDateTime.minute,
+                                      );
+                                    });
+                                  },
+                                  scrollController: FixedExtentScrollController(
+                                    initialItem: MediaQuery.of(context)
+                                            .alwaysUse24HourFormat
+                                        ? _selectedDateTime.hour
+                                        : (_selectedDateTime.hour % 12 == 0
+                                            ? 0
+                                            : _selectedDateTime.hour % 12),
+                                  ),
+                                  children: List<Widget>.generate(
+                                    MediaQuery.of(context).alwaysUse24HourFormat
+                                        ? 24
+                                        : 12,
+                                    (int index) {
+                                      final hour = MediaQuery.of(context)
+                                              .alwaysUse24HourFormat
+                                          ? index
+                                          : (index == 0 ? 12 : index);
+                                      return Center(
+                                        child: Text(
+                                          hour.toString().padLeft(2, '0'),
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+
+                              const Text(
+                                ":",
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
+
+                              // Minute Picker
+                              SizedBox(
+                                width: 70,
+                                child: CupertinoPicker(
+                                  magnification: 1.2,
+                                  squeeze: 1.2,
+                                  useMagnifier: true,
+                                  itemExtent: 40,
+                                  looping: true,
+                                  onSelectedItemChanged: (int index) {
+                                    setState(() {
+                                      _selectedDateTime = DateTime(
+                                        _selectedDateTime.year,
+                                        _selectedDateTime.month,
+                                        _selectedDateTime.day,
+                                        _selectedDateTime.hour,
+                                        index,
+                                      );
+                                    });
+                                  },
+                                  scrollController: FixedExtentScrollController(
+                                    initialItem: _selectedDateTime.minute,
+                                  ),
+                                  children: List<Widget>.generate(
+                                    60,
+                                    (int index) {
+                                      return Center(
+                                        child: Text(
+                                          index.toString().padLeft(2, '0'),
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              if (!MediaQuery.of(context).alwaysUse24HourFormat)
+                                SizedBox(
+                                  width: 60,
+                                  child: CupertinoPicker(
+                                    magnification: 1.2,
+                                    squeeze: 1.2,
+                                    useMagnifier: true,
+                                    itemExtent: 40,
+                                    onSelectedItemChanged: (int index) {
+                                      setState(() {
+                                        final newHour = index == 0
+                                            ? _selectedDateTime.hour % 12
+                                            : _selectedDateTime.hour % 12 + 12;
+                                        _selectedDateTime = DateTime(
+                                          _selectedDateTime.year,
+                                          _selectedDateTime.month,
+                                          _selectedDateTime.day,
+                                          newHour,
+                                          _selectedDateTime.minute,
+                                        );
+                                      });
+                                    },
+                                    scrollController:
+                                        FixedExtentScrollController(
+                                      initialItem:
+                                          _selectedDateTime.hour >= 12 ? 1 : 0,
+                                    ),
+                                    children: const [
+                                      Center(
+                                        child: Text(
+                                          "AM",
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      ),
+                                      Center(
+                                        child: Text(
+                                          "PM",
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 40),
-                  // Settings Container
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -167,7 +327,6 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                     ),
                     child: Column(
                       children: [
-                        // NFC Toggle
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -190,7 +349,39 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                             ),
                             Switch(
                               value: _nfcEnabled,
-                              onChanged: (value) => setState(() => _nfcEnabled = value),
+                              onChanged: (value) async {
+                                if (value) {
+                                  final NFCController nfcController =
+                                      Get.put(NFCController());
+
+                                  if (!nfcController.isNfcAvailable.value) {
+                                    Get.snackbar(
+                                      'NFC Not Available',
+                                      'Your device does not support NFC or NFC is disabled.',
+                                      backgroundColor: Colors.red,
+                                      colorText: Colors.white,
+                                      snackPosition: SnackPosition.BOTTOM,
+                                    );
+                                    return;
+                                  }
+
+                                  int? tempAlarmId = _isEditing
+                                      ? _editingAlarm!.id
+                                      : DateTime.now().millisecondsSinceEpoch;
+
+                                  final result = await Get.to(() =>
+                                      AddNFCWidget(alarmId: tempAlarmId!));
+
+                                  setState(() {
+                                    _nfcEnabled = result == true;
+                                  });
+                                } else {
+                                  // Simply turn off NFC requirement
+                                  setState(() {
+                                    _nfcEnabled = false;
+                                  });
+                                }
+                              },
                               activeColor: Colors.white,
                               activeTrackColor: Colors.black,
                             ),
@@ -200,13 +391,16 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                         // Sound Selection
                         InkWell(
                           onTap: () async {
-                            // Stop current playing sound before going to sound selection
                             _alarmController.stopAlarmSound();
-                            final result = await Get.toNamed(AppConstants.alarmSounds);
+                            final result = await Get.toNamed(
+                              AppConstants.alarmSounds,
+                              arguments: _selectedSoundId,
+                            );
                             if (result != null) {
                               setState(() {
                                 _selectedSoundId = result;
-                                _selectedSoundName = SoundManager.getSoundName(_selectedSoundId);
+                                _selectedSoundName =
+                                    SoundManager.getSoundName(_selectedSoundId);
                               });
                               _alarmController.playAlarmSound(_selectedSoundId);
                             }
@@ -223,7 +417,8 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                                   ),
                                   const SizedBox(width: 12),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Alarm Sound',
@@ -290,7 +485,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                           ),
                         ),
                         child: Text(
-                          'Save',
+                          _isEditing ? 'Update' : 'Save',
                           style: GoogleFonts.inter(
                             color: Colors.black,
                             fontSize: 16,

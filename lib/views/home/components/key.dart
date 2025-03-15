@@ -30,7 +30,6 @@ class _KeyWidgetState extends State<KeyWidget> {
         body: SafeArea(
           child: Stack(
             children: [
-              // Back button
               Positioned(
                 top: 10,
                 left: 22,
@@ -52,7 +51,6 @@ class _KeyWidgetState extends State<KeyWidget> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Key entry card
                     Material(
                       elevation: 4,
                       borderRadius: BorderRadius.circular(16),
@@ -84,13 +82,11 @@ class _KeyWidgetState extends State<KeyWidget> {
                                 ),
                               ),
                               const SizedBox(height: 24),
-                              // Key input field
                               TextFormField(
                                 controller: _textController,
                                 decoration: InputDecoration(
                                   hintText: 'Enter Turn Off Key',
-                                  hintStyle: GoogleFonts.inter(
-                                  ),
+                                  hintStyle: GoogleFonts.inter(),
                                   enabledBorder: OutlineInputBorder(
                                     borderSide: const BorderSide(
                                       color: Color(0xFFE0E0E0),
@@ -120,8 +116,7 @@ class _KeyWidgetState extends State<KeyWidget> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
-                                style: GoogleFonts.inter(
-                                ),
+                                style: GoogleFonts.inter(),
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
                                     return 'Please enter the key';
@@ -130,21 +125,21 @@ class _KeyWidgetState extends State<KeyWidget> {
                                 },
                               ),
                               const SizedBox(height: 24),
-                              // Turn off alarm button
                               SizedBox(
                                 width: double.infinity,
                                 height: 50,
                                 child: ElevatedButton(
                                   onPressed: () {
                                     if (_formKey.currentState!.validate()) {
-                                      // Add your alarm turn off logic here
                                       if (kDebugMode) {
-                                        print('Key submitted: ${_textController.text}');
+                                        print(
+                                            'Key submitted: ${_textController.text}');
                                       }
                                     }
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Theme.of(context).primaryColor,
+                                    backgroundColor:
+                                        Theme.of(context).primaryColor,
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
@@ -153,8 +148,7 @@ class _KeyWidgetState extends State<KeyWidget> {
                                   ),
                                   child: Text(
                                     'Turn Off Alarm',
-                                    style: GoogleFonts.interTight(
-                                    ),
+                                    style: GoogleFonts.interTight(),
                                   ),
                                 ),
                               ),

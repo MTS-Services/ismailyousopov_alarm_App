@@ -42,7 +42,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: Icon(
                                   Icons.nfc_rounded,
                                   color: Theme.of(context).primaryColor,
@@ -53,7 +54,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: Text(
                                   'NFC',
                                   style: GoogleFonts.inter(
@@ -85,7 +87,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: FaIcon(
                                   FontAwesomeIcons.music,
                                   color: Theme.of(context).primaryColor,
@@ -96,7 +99,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: Text(
                                   'Alarm',
                                   style: GoogleFonts.inter(
@@ -134,7 +138,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: Icon(
                                   Icons.public,
                                   color: Theme.of(context).primaryColor,
@@ -145,7 +150,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: Text(
                                   'Language',
                                   style: GoogleFonts.inter(
@@ -177,7 +183,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.center,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: Icon(
                                   Icons.query_stats_rounded,
                                   color: Theme.of(context).primaryColor,
@@ -188,7 +195,8 @@ class CustomDrawer extends StatelessWidget {
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 15),
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    0, 0, 0, 15),
                                 child: Text(
                                   'Statistics',
                                   style: GoogleFonts.inter(
@@ -218,7 +226,9 @@ class CustomDrawer extends StatelessWidget {
                 ),
               ),
               onTap: () {
-                Get.to(const OnboardingScreen(isFromAboutSection: true,));
+                Get.to(const OnboardingScreen(
+                  isFromAboutSection: true,
+                ));
               },
             ),
             ListTile(

@@ -1,37 +1,30 @@
+import 'package:alarm/views/home/components/alarm_edit.dart';
 import 'package:alarm/views/home/components/alarm_history.dart';
 import 'package:alarm/views/home/components/alarm_set_screen.dart';
 import 'package:alarm/views/home/components/alarm_sounds.dart';
 import 'package:alarm/views/home/components/app_version.dart';
 import 'package:alarm/views/home/components/key.dart';
-import 'package:alarm/views/home/components/nfc_scan.dart';
-import 'package:alarm/views/home/components/nfc_settings.dart';
-import 'package:alarm/views/home/components/notification_service.dart';
-import 'package:alarm/views/home/components/sleep_history.dart';
 import 'package:alarm/views/home/components/stop_alarm.dart';
+import 'package:alarm/views/home/components/nfc_settings.dart';
+import 'package:alarm/core/services/notification_service.dart';
+import 'package:alarm/views/home/components/sleep_history.dart';
+import 'package:alarm/views/home/components/scan_nfc.dart';
 import 'package:alarm/views/home/home_screen.dart';
 import 'package:alarm/views/onboarding/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'core/constants/asset_constants.dart';
+import 'core/database/database_helper.dart';
+import 'core/services/alarm_background_service.dart';
 import 'core/theme/app_theme.dart';
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await _requestNotificationPermission();
+  final dbHelper = DatabaseHelper();
+  await dbHelper.verifyDatabaseConnection();
   await NotificationService.initialize();
+  await AlarmBackgroundService.initializeService();
   runApp(const MyApp());
-}
-
-
-Future<void> _requestNotificationPermission() async {
-  final status = await Permission.notification.request();
-  if (status.isGranted) {
-    debugPrint('Notification permission granted');
-  } else {
-    debugPrint('Notification permission denied');
-  }
 }
 
 class MyApp extends StatelessWidget {
@@ -43,7 +36,6 @@ class MyApp extends StatelessWidget {
       title: AppConstants.appName,
       theme: AppTheme.lightTheme,
       initialRoute: AppConstants.onboarding,
-
       getPages: [
         GetPage(
           name: AppConstants.onboarding,
@@ -52,7 +44,7 @@ class MyApp extends StatelessWidget {
         ),
         GetPage(
           name: AppConstants.home,
-          page: () =>  HomeScreen(),
+          page: () => HomeScreen(),
           transition: Transition.fadeIn,
         ),
         GetPage(
@@ -63,6 +55,11 @@ class MyApp extends StatelessWidget {
         GetPage(
           name: AppConstants.alarmHistory,
           page: () => const AlarmHistoryWidget(),
+          transition: Transition.rightToLeft,
+        ),
+        GetPage(
+          name: AppConstants.alarmEdit,
+          page: () => const AlarmEditScreen(),
           transition: Transition.rightToLeft,
         ),
         GetPage(
@@ -77,12 +74,21 @@ class MyApp extends StatelessWidget {
         ),
         GetPage(
           name: AppConstants.nfcScan,
-          page: () => const NFCScanWidget(),
+          page: () {
+            final Map<String, dynamic> args = Get.arguments ?? {};
+            final int alarmId =
+                args['alarmId'] ?? 0; // Default value or handle missing case
+            return AddNFCWidget(alarmId: alarmId);
+          },
           transition: Transition.rightToLeft,
         ),
         GetPage(
           name: AppConstants.stopAlarm,
-          page: () => const StopAlarmWidget(),
+          page: () {
+            final Map<String, dynamic> args = Get.arguments ?? {};
+            final int alarmId = args['alarmId'] ?? 0;
+            return AlarmStopWidget(alarmId: alarmId);
+          },
           transition: Transition.rightToLeft,
         ),
         GetPage(

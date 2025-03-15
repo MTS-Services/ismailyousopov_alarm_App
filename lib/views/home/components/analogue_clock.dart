@@ -82,7 +82,7 @@ class _ClockPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = min(size.width, size.height) / 2;
 
-    // Draw clock face
+    /// Draw clock face
     final backgroundPaint = Paint()
       ..color = backgroundColor
       ..style = PaintingStyle.fill;
@@ -95,7 +95,7 @@ class _ClockPainter extends CustomPainter {
     canvas.drawCircle(center, radius, backgroundPaint);
     canvas.drawCircle(center, radius, borderPaint);
 
-    // Draw numbers
+    /// Draw numbers
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       textAlign: TextAlign.center,
@@ -123,20 +123,20 @@ class _ClockPainter extends CustomPainter {
       );
     }
 
-    // Hour hand
+    /// Hour hand
     final hour = currentTime.hour % 12;
     final hourAngle = pi / 6 * hour + pi / 360 * currentTime.minute - pi / 2;
     _drawHand(canvas, center, hourAngle, radius * 0.4, radius * 0.015, handColor);
 
-    // Minute hand
+    /// Minute hand
     final minuteAngle = pi / 30 * currentTime.minute - pi / 2;
     _drawHand(canvas, center, minuteAngle, radius * 0.6, radius * 0.01, handColor);
 
-    // Second hand
+    /// Second hand
     final secondAngle = pi / 30 * currentTime.second - pi / 2;
     _drawHand(canvas, center, secondAngle, radius * 0.7, radius * 0.005, secondHandColor);
 
-    // Center dot
+    /// Center dot
     canvas.drawCircle(
       center,
       radius * 0.03,

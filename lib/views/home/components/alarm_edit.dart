@@ -1,23 +1,24 @@
+import 'package:alarm/views/home/components/alarm_history.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
-
+import 'package:google_fonts/google_fonts.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
 import '../../../core/constants/asset_constants.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../models/alarm/alarm_model.dart';
+import '../../../core/services/notification_service.dart';
 
-class AlarmHistoryWidget extends StatefulWidget {
-  const AlarmHistoryWidget({super.key});
+class AlarmEditScreen extends StatefulWidget {
+  const AlarmEditScreen({super.key});
 
   @override
-  State<AlarmHistoryWidget> createState() => _AlarmHistoryWidgetState();
+  State<AlarmEditScreen> createState() => _AlarmEditScreenState();
 }
 
-class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
+class _AlarmEditScreenState extends State<AlarmEditScreen> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
-  final AlarmController _alarmController = Get.put(AlarmController());
   final DatabaseHelper _databaseHelper = DatabaseHelper();
+  final AlarmController _alarmController = Get.put(AlarmController());
   List<AlarmModel> _alarms = [];
   bool _isLoading = true;
 
@@ -27,66 +28,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     _loadAlarms();
   }
 
-  /// Creates a new active alarm based on settings from a previous alarm
-  Future<void> _reuseAlarm(AlarmModel alarm) async {
-    try {
-      final DateTime now = DateTime.now();
-      DateTime newTime;
-
-      final bool isTimePassedForToday = alarm.time.hour < now.hour ||
-          (alarm.time.hour == now.hour && alarm.time.minute <= now.minute);
-
-      if (isTimePassedForToday) {
-        final tomorrow = DateTime.now().add(const Duration(days: 1));
-        newTime = DateTime(
-          tomorrow.year,
-          tomorrow.month,
-          tomorrow.day,
-          alarm.time.hour,
-          alarm.time.minute,
-        );
-      } else {
-        newTime = DateTime(
-          now.year,
-          now.month,
-          now.day,
-          alarm.time.hour,
-          alarm.time.minute,
-        );
-      }
-
-      final newAlarm = AlarmModel(
-        id: null,
-        time: newTime,
-        isEnabled: true,
-        soundId: alarm.soundId,
-        nfcRequired: alarm.nfcRequired,
-        daysActive: List<String>.from(alarm.daysActive),
-        isForToday: true,
-      );
-
-      if (alarm.id != null) {
-        await _databaseHelper.deleteAlarm(alarm.id!);
-      }
-
-      await _alarmController.createAlarm(newAlarm);
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      await _alarmController.loadAlarms();
-      _alarmController.refreshTimestamp.value =
-          DateTime.now().millisecondsSinceEpoch;
-      await _loadAlarms();
-
-      Get.toNamed(AppConstants.home);
-      _showFeedbackMessage('Alarm reused successfully');
-    } catch (e) {
-      debugPrint('Error reusing alarm: $e');
-      _showFeedbackMessage('Failed to reuse alarm: ${e.toString()}',
-          isError: true);
-    }
-  }
-
-  /// Loads all past or inactive alarms from the database
+  /// Loads all active alarms from the database (enabled and future alarms)
   Future<void> _loadAlarms() async {
     setState(() {
       _isLoading = true;
@@ -94,15 +36,20 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
 
     try {
       final allAlarms = await _databaseHelper.getAllAlarms();
-      final DateTime now = DateTime.now();
 
-      final historyAlarms = allAlarms.where((alarm) {
-        return !alarm.isEnabled ||
-            (!alarm.isRepeating && alarm.time.isBefore(now));
+      final activeAlarms = allAlarms.where((alarm) {
+        if (!alarm.isEnabled) return false;
+
+        final now = DateTime.now();
+        if (alarm.daysActive.isEmpty || alarm.daysActive.first.isEmpty) {
+          return alarm.time.isAfter(now);
+        }
+
+        return true;
       }).toList();
 
       setState(() {
-        _alarms = historyAlarms;
+        _alarms = activeAlarms;
         _isLoading = false;
       });
     } catch (e) {
@@ -114,29 +61,44 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     }
   }
 
-  /// Permanently removes an alarm from the database
-  Future<void> _deleteAlarm(int? id) async {
-    if (id == null) return;
+  /// Disables an alarm and cancels its notification
+  Future<void> _cancelAlarm(AlarmModel alarm) async {
+    if (alarm.id == null) return;
 
     try {
-      await _databaseHelper.deleteAlarm(id);
-      _showFeedbackMessage('Alarm deleted successfully');
+      alarm.isEnabled = false;
+      await _databaseHelper.updateAlarm(alarm);
+      await NotificationService.cancelNotification(alarm.id!);
+      await _alarmController.loadAlarms();
+      _showFeedbackMessage('Alarm canceled successfully');
       _loadAlarms();
     } catch (e) {
-      debugPrint('Error deleting alarm: $e');
-      _showFeedbackMessage('Failed to delete alarm', isError: true);
+      debugPrint('Error canceling alarm: $e');
+      _showFeedbackMessage('Failed to cancel alarm', isError: true);
     }
+  }
+
+  /// Navigates to the alarm settings screen with the selected alarm for editing
+  void _editAlarm(AlarmModel alarm) {
+    _alarmController.stopAlarmSound();
+    Get.toNamed(
+      AppConstants.setAlarm,
+      arguments: alarm,
+    )?.then((_) {
+      _alarmController.forceRefreshUI();
+      _loadAlarms();
+    });
   }
 
   /// Displays a time widget with hours, minutes and AM/PM indicator
   Widget _formatTimeWidget(DateTime? time, {double scaleFactor = 1.0}) {
     if (time == null) return const Text('');
-
     final hour =
-        time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.hour >= 12 ? 'PM' : 'AM';
 
+    // Responsive font sizes based on screen width
     final timeFontSize = 35.0 * scaleFactor;
     final periodFontSize = 10.0 * scaleFactor;
 
@@ -165,21 +127,48 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     );
   }
 
+  /// Shows visual indicators for which days of the week the alarm is active
+  Widget _buildDaysIndicator(AlarmModel alarm, {double scaleFactor = 1.0}) {
+    final dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final circleSize = 22.0 * scaleFactor;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(7, (index) {
+        final isActive = alarm.daysActive.contains((index + 1).toString());
+        return Container(
+          width: circleSize,
+          height: circleSize,
+          margin: EdgeInsets.symmetric(horizontal: 2 * scaleFactor),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isActive ? Colors.white : Colors.white.withOpacity(0.3),
+          ),
+          child: Center(
+            child: Text(
+              dayLabels[index],
+              style: TextStyle(
+                fontSize: 10 * scaleFactor,
+                fontWeight: FontWeight.bold,
+                color: isActive ? Theme.of(context).primaryColor : Colors.white,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
   /// Shows a feedback message to the user
   void _showFeedbackMessage(String message, {bool isError = false}) {
     if (!mounted) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            duration: const Duration(seconds: 2),
-            backgroundColor: isError ? Colors.red : null,
-          ),
-        );
-      }
-    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        backgroundColor: isError ? Colors.red : null,
+      ),
+    );
   }
 
   @override
@@ -201,7 +190,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
             onPressed: () => Get.toNamed(AppConstants.home),
           ),
           title: Text(
-            'Alarm History',
+            'Edit Alarms',
             style: GoogleFonts.interTight(
               color: Theme.of(context).textTheme.bodyLarge?.color,
               fontSize: 24,
@@ -224,16 +213,12 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
   /// Builds the main content based on loading state and alarm availability
   Widget _buildBodyContent() {
     if (_isLoading) {
-      return Center(
-          child: CircularProgressIndicator(
-        color: Theme.of(context).primaryColor,
-      ));
+      return const Center(child: CircularProgressIndicator());
     }
-
     if (_alarms.isEmpty) {
       return Center(
         child: Text(
-          'No alarm history found',
+          'No active alarms found',
           style: GoogleFonts.interTight(
             fontSize: 18,
             fontWeight: FontWeight.w500,
@@ -251,17 +236,13 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     );
   }
 
-  /// Builds an individual alarm card with time display and action buttons
+  /// Builds an individual alarm card with time display, days indicator and action buttons
   Widget _buildAlarmCard(AlarmModel alarm) {
-    // Get screen size to calculate responsive values
+
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // Calculate scaling factor based on screen width
-    final scaleFactor = screenWidth < 360
-        ? 0.8
-        : screenWidth < 400
-            ? 0.9
-            : 1.0;
+    final scaleFactor = screenWidth < 360 ? 0.8 :
+    screenWidth < 400 ? 0.9 : 1.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -281,28 +262,41 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
             ),
             child: Padding(
               padding: EdgeInsets.all(16 * scaleFactor),
-              child: isNarrow
-                  ? Column(
-                      children: [
-                        Center(
-                          child: _formatTimeWidget(alarm.time,
-                              scaleFactor: scaleFactor),
-                        ),
-                        SizedBox(height: 16 * scaleFactor),
-                        _buildActionButtons(alarm, scaleFactor: scaleFactor),
-                      ],
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.only(left: 22 * scaleFactor),
-                          child: _formatTimeWidget(alarm.time,
-                              scaleFactor: scaleFactor),
-                        ),
-                        _buildActionButtons(alarm, scaleFactor: scaleFactor),
-                      ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  isNarrow
+                      ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
+                      const SizedBox(height: 12),
+                      _buildActionButtons(alarm, scaleFactor: scaleFactor),
+                    ],
+                  )
+                      : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.only(left: 22 * scaleFactor),
+                        child: _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
+                      ),
+                      _buildActionButtons(alarm, scaleFactor: scaleFactor),
+                    ],
+                  ),
+                  if (alarm.daysActive.isNotEmpty &&
+                      alarm.daysActive.first.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        left: isNarrow ? 0 : 22 * scaleFactor,
+                        top: 8 * scaleFactor,
+                      ),
+                      child: Center(
+                        child: _buildDaysIndicator(alarm, scaleFactor: scaleFactor),
+                      ),
                     ),
+                ],
+              ),
             ),
           ),
         );
@@ -310,7 +304,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     );
   }
 
-  /// Builds action buttons (Delete and Use)
+  /// Builds action buttons (Cancel and Edit)
   Widget _buildActionButtons(AlarmModel alarm, {double scaleFactor = 1.0}) {
     final buttonHeight = 36.0 * scaleFactor;
     final buttonWidth = 80.0 * scaleFactor;
@@ -319,7 +313,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
       mainAxisSize: MainAxisSize.min,
       children: [
         ElevatedButton(
-          onPressed: () => _deleteAlarm(alarm.id),
+          onPressed: () => _cancelAlarm(alarm),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.black,
             padding: EdgeInsets.all(8 * scaleFactor),
@@ -332,7 +326,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              'Delete',
+              'Cancel',
               style: TextStyle(
                 fontFamily: 'Inter',
                 color: const Color(0xFFF9F8F8),
@@ -344,7 +338,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
         ),
         SizedBox(width: 8 * scaleFactor),
         ElevatedButton(
-          onPressed: () => _reuseAlarm(alarm),
+          onPressed: () => _editAlarm(alarm),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
             padding: EdgeInsets.all(8 * scaleFactor),
@@ -357,7 +351,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              'Use',
+              'Edit',
               style: TextStyle(
                 fontFamily: 'Inter',
                 color: Theme.of(context).textTheme.bodyMedium?.color,
@@ -369,21 +363,5 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
         ),
       ],
     );
-  }
-}
-
-/// Extension to add space between widgets in a list
-extension WidgetListExtension on List<Widget> {
-  List<Widget> divide(Widget divider) {
-    if (length <= 1) return this;
-
-    final newList = <Widget>[];
-    for (var i = 0; i < length; i++) {
-      newList.add(this[i]);
-      if (i != length - 1) {
-        newList.add(divider);
-      }
-    }
-    return newList;
   }
 }

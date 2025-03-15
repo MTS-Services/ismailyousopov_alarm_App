@@ -16,21 +16,20 @@ class CustomNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    final horizontalPadding = screenWidth * 0.08;
+
     return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(32, 10, 32, 0),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 10, horizontalPadding, 0),
       child: Material(
         color: Colors.transparent,
         elevation: 2,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            bottomLeft: Radius.circular(20),
-            bottomRight: Radius.circular(20),
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
         child: Container(
-          width: MediaQuery.of(context).size.width * 1.079,
+          width: double.infinity,
           height: 70,
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -41,41 +40,39 @@ class CustomNavigationBar extends StatelessWidget {
                 offset: Offset(0, 2),
               )
             ],
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(20),
-              bottomRight: Radius.circular(20),
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
+            borderRadius: BorderRadius.all(Radius.circular(20)),
             shape: BoxShape.rectangle,
           ),
           child: Align(
             alignment: const AlignmentDirectional(0, 0),
             child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(16, 24, 16, 24),
+              padding: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.04,
+                vertical: 24,
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.max,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildNavItem(
+                  buildNavItem(
                     icon: Icons.access_time_outlined,
                     size: 26,
-                    onTap: () => Get.toNamed(AppConstants.home),
+                    onTap: () => Get.toNamed(AppConstants.alarmHistory),
                   ),
-                  _buildNavItem(
+                  buildNavItem(
                     icon: Icons.nfc_outlined,
                     size: 25,
                     onTap: () => Get.toNamed(AppConstants.nfcScan),
                   ),
-                  _buildNavItem(
+                  buildNavItem(
                     icon: Icons.query_stats_outlined,
                     size: 28,
                     onTap: () => Get.toNamed(AppConstants.sleepHistory),
                   ),
-                  _buildNavItem(
+                  buildNavItem(
                     icon: FontAwesomeIcons.bars,
                     size: 22,
-                    onTap: () =>  controller.openDrawer(context),
+                    onTap: () => controller.openDrawer(context),
                   ),
                 ],
               ),
@@ -86,7 +83,7 @@ class CustomNavigationBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem({
+  Widget buildNavItem({
     required IconData icon,
     required double size,
     required VoidCallback onTap,

@@ -1,6 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-
 import '../../models/alarm/alarm_model.dart';
 
 class DatabaseHelper {
@@ -8,7 +8,6 @@ class DatabaseHelper {
   static Database? _database;
 
   factory DatabaseHelper() => _instance;
-
   DatabaseHelper._internal();
 
   Future<Database> get database async {
@@ -17,15 +16,18 @@ class DatabaseHelper {
     return _database!;
   }
 
+  /// Initializes the SQLite database with proper versioning
   Future<Database> _initDatabase() async {
     String path = await getDatabasesPath();
     return await openDatabase(
       join(path, 'alarm_database.db'),
-      version: 1,
+      version: 5,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
+  /// Creates database tables on first initialization
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE alarms (
@@ -34,7 +36,11 @@ class DatabaseHelper {
         is_enabled INTEGER NOT NULL,
         sound_id INTEGER NOT NULL,
         nfc_required INTEGER NOT NULL,
-        days_active TEXT
+        days_active TEXT,
+        is_for_today INTEGER NOT NULL DEFAULT 0,
+        last_set_time TEXT,
+        last_stop_time TEXT,
+        duration_minutes INTEGER DEFAULT 30
       )
     ''');
 
@@ -44,69 +50,356 @@ class DatabaseHelper {
         date TEXT NOT NULL,
         sleep_time TEXT NOT NULL,
         wake_time TEXT NOT NULL,
-        total_hours REAL NOT NULL
+        total_hours REAL NOT NULL,
+        alarm_count INTEGER DEFAULT 1,
+        total_alarm_duration INTEGER DEFAULT 30
       )
     ''');
   }
 
+  /// Handles database migrations when upgrading to newer versions
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+          'ALTER TABLE sleep_history ADD COLUMN alarm_count INTEGER DEFAULT 1');
+    }
+
+    if (oldVersion < 3) {
+      await db.execute(
+          'ALTER TABLE alarms ADD COLUMN is_for_today INTEGER NOT NULL DEFAULT 0');
+    }
+
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE alarms ADD COLUMN last_set_time TEXT');
+      await db.execute('ALTER TABLE alarms ADD COLUMN last_stop_time TEXT');
+    }
+
+    if (oldVersion < 5) {
+      await db.execute(
+          'ALTER TABLE alarms ADD COLUMN duration_minutes INTEGER DEFAULT 30');
+      await db.execute(
+          'ALTER TABLE sleep_history ADD COLUMN total_alarm_duration INTEGER DEFAULT 30');
+    }
+  }
+
+  /// Inserts a new alarm into the database
   Future<int> insertAlarm(AlarmModel alarm) async {
-    final db = await database;
-    return await db.insert(
-      'alarms',
-      alarm.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    try {
+      final db = await database;
+      return await db.insert(
+        'alarms',
+        alarm.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (e) {
+      debugPrint('Error inserting alarm: $e');
+      rethrow;
+    }
   }
 
+  /// Retrieves all alarms from the database
   Future<List<AlarmModel>> getAllAlarms() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('alarms');
-    return List.generate(maps.length, (i) {
-      return AlarmModel.fromMap(maps[i]);
-    });
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query('alarms');
+      return List.generate(maps.length, (i) {
+        return AlarmModel.fromMap(maps[i]);
+      });
+    } catch (e) {
+      debugPrint('Error retrieving alarms: $e');
+      return [];
+    }
   }
 
+  /// Updates an existing alarm's properties
   Future<int> updateAlarm(AlarmModel alarm) async {
-    final db = await database;
-    return await db.update(
-      'alarms',
-      alarm.toMap(),
-      where: 'id = ?',
-      whereArgs: [alarm.id],
-    );
+    try {
+      if (alarm.id == null) {
+        throw Exception('Cannot update alarm without an ID');
+      }
+
+      final db = await database;
+      return await db.update(
+        'alarms',
+        alarm.toMap(),
+        where: 'id = ?',
+        whereArgs: [alarm.id],
+      );
+    } catch (e) {
+      debugPrint('Error updating alarm: $e');
+      return 0;
+    }
   }
 
+  /// Deletes an alarm by its ID
   Future<int> deleteAlarm(int id) async {
-    final db = await database;
-    return await db.delete(
-      'alarms',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    try {
+      final db = await database;
+      return await db.delete(
+        'alarms',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      debugPrint('Error deleting alarm: $e');
+      return 0;
+    }
   }
 
+  /// Records or updates sleep history data for a specific date
   Future<void> insertSleepHistory({
     required DateTime date,
     required DateTime sleepTime,
     required DateTime wakeTime,
+    required double totalHours,
+    int alarmCount = 1,
+    required int totalAlarmDuration,
   }) async {
-    final db = await database;
-    final totalHours = wakeTime.difference(sleepTime).inHours.toDouble();
+    try {
+      final db = await database;
 
-    await db.insert(
-      'sleep_history',
-      {
-        'date': date.toIso8601String(),
-        'sleep_time': sleepTime.toIso8601String(),
-        'wake_time': wakeTime.toIso8601String(),
-        'total_hours': totalHours,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      final formattedDate =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      debugPrint(
+          'Attempting to insert/update sleep history for date: $formattedDate');
+      final existingRecords = await db.query(
+        'sleep_history',
+        where: 'date LIKE ?',
+        whereArgs: ['$formattedDate%'],
+      );
+
+      debugPrint(
+          'Found ${existingRecords.length} existing records for this date');
+      debugPrint(
+          'Inserting totalHours: $totalHours, totalAlarmDuration: $totalAlarmDuration');
+
+      if (existingRecords.isNotEmpty) {
+        await db.update(
+          'sleep_history',
+          {
+            'sleep_time': sleepTime.toIso8601String(),
+            'wake_time': wakeTime.toIso8601String(),
+            'total_hours': totalHours,
+            'alarm_count': alarmCount,
+            'total_alarm_duration': totalAlarmDuration,
+          },
+          where: 'id = ?',
+          whereArgs: [existingRecords.first['id']],
+        );
+      } else {
+        await db.insert(
+          'sleep_history',
+          {
+            'date': date.toIso8601String(),
+            'sleep_time': sleepTime.toIso8601String(),
+            'wake_time': wakeTime.toIso8601String(),
+            'total_hours': totalHours,
+            'alarm_count': alarmCount,
+            'total_alarm_duration': totalAlarmDuration,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        final verifyRecords = await db.query(
+          'sleep_history',
+          where: 'date LIKE ?',
+          whereArgs: ['$formattedDate%'],
+        );
+        debugPrint(
+            'After insert/update, found ${verifyRecords.length} records for date: $formattedDate');
+        if (verifyRecords.isNotEmpty) {
+          debugPrint('Record data: ${verifyRecords.first}');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error inserting sleep history: $e');
+      debugPrint('Stack trace: ${StackTrace.current}');
+      rethrow;
+    }
+  }
+
+  /// update alarm duration
+  Future<void> updateAlarmDuration(int alarmId, int actualDuration) async {
+    final db = await database;
+    await db.update(
+      'alarms',
+      {'duration_minutes': actualDuration},
+      where: 'id = ?',
+      whereArgs: [alarmId],
     );
   }
 
+  /// Retrieves all sleep history records ordered by date
   Future<List<Map<String, dynamic>>> getSleepHistory() async {
-    final db = await database;
-    return await db.query('sleep_history', orderBy: 'date DESC');
+    try {
+      final db = await database;
+      final result = await db.query('sleep_history', orderBy: 'date DESC');
+      return result;
+    } catch (e) {
+      debugPrint('Database error in getSleepHistory(): $e');
+      return [];
+    }
+  }
+
+  /// Retrieves sleep history for a specific date range
+  Future<List<Map<String, dynamic>>> getSleepHistoryRange(
+      DateTime startDate, DateTime endDate) async {
+    try {
+      final db = await database;
+
+      final startIso = startDate.toIso8601String();
+      final endIso = endDate.toIso8601String();
+
+      debugPrint('Querying sleep history range from $startIso to $endIso');
+
+      final result = await db.query('sleep_history',
+          where: 'date >= ? AND date <= ?',
+          whereArgs: [startIso, endIso],
+          orderBy: 'date DESC');
+
+      debugPrint('Found ${result.length} records in date range');
+      return result;
+    } catch (e) {
+      debugPrint('Error retrieving sleep history range: $e');
+      return [];
+    }
+  }
+
+  /// Update alarm set and stop times
+  Future<int> updateAlarmTimes(int alarmId,
+      {DateTime? setTime, DateTime? stopTime}) async {
+    try {
+      final db = await database;
+      Map<String, dynamic> updates = {};
+
+      if (setTime != null) {
+        updates['last_set_time'] = setTime.toIso8601String();
+      }
+
+      if (stopTime != null) {
+        updates['last_stop_time'] = stopTime.toIso8601String();
+      }
+
+      if (updates.isEmpty) return 0;
+
+      return await db.update(
+        'alarms',
+        updates,
+        where: 'id = ?',
+        whereArgs: [alarmId],
+      );
+    } catch (e) {
+      debugPrint('Error updating alarm times: $e');
+      return 0;
+    }
+  }
+
+  /// Get all alarms that were set for today
+  Future<List<Map<String, dynamic>>> getTodayAlarms() async {
+    try {
+      final db = await database;
+      return await db
+          .query('alarms', where: 'is_for_today = ?', whereArgs: [1]);
+    } catch (e) {
+      debugPrint('Error getting today\'s alarms: $e');
+      return [];
+    }
+  }
+
+  /// Deletes a sleep history record by its ID
+  Future<int> deleteSleepHistoryRecord(int id) async {
+    try {
+      final db = await database;
+      return await db.delete(
+        'sleep_history',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      debugPrint('Error deleting sleep history record: $e');
+      return 0;
+    }
+  }
+
+  /// Resets the "is_for_today" flag for all alarms
+  Future<void> resetTodayAlarms() async {
+    try {
+      final db = await database;
+      await db.update(
+        'alarms',
+        {'is_for_today': 0},
+        where: 'is_for_today = ?',
+        whereArgs: [1],
+      );
+    } catch (e) {
+      debugPrint('Error resetting today\'s alarms: $e');
+    }
+  }
+
+  /// Validates and reports on the database connection and structure
+  Future<Map<String, dynamic>> verifyDatabaseConnection() async {
+    debugPrint('\n=== DATABASE CONNECTION VERIFICATION ===');
+    Map<String, dynamic> status = {
+      'success': false,
+      'message': '',
+      'details': {}
+    };
+
+    try {
+      final db = await database;
+      final dbVersion = await db.getVersion();
+
+      status['success'] = true;
+      status['message'] = 'Database connection successful';
+      status['details']['path'] = db.path;
+      status['details']['version'] = dbVersion;
+
+      final tables = await db
+          .rawQuery("SELECT name FROM sqlite_master WHERE type='table'");
+      List<String> tableNames = [];
+      for (var table in tables) {
+        tableNames.add(table['name'] as String);
+      }
+      status['details']['tables'] = tableNames;
+
+      Map<String, dynamic> tableStructures = {};
+
+      try {
+        final alarmStructure = await db.rawQuery("PRAGMA table_info(alarms)");
+        final alarmCount = Sqflite.firstIntValue(
+            await db.rawQuery("SELECT COUNT(*) FROM alarms"));
+
+        tableStructures['alarms'] = {
+          'structure': alarmStructure,
+          'recordCount': alarmCount
+        };
+      } catch (e) {
+        tableStructures['alarms'] = {'error': e.toString()};
+      }
+
+      try {
+        final sleepHistoryStructure =
+            await db.rawQuery("PRAGMA table_info(sleep_history)");
+        final sleepHistoryCount = Sqflite.firstIntValue(
+            await db.rawQuery("SELECT COUNT(*) FROM sleep_history"));
+
+        tableStructures['sleep_history'] = {
+          'structure': sleepHistoryStructure,
+          'recordCount': sleepHistoryCount
+        };
+      } catch (e) {
+        tableStructures['sleep_history'] = {'error': e.toString()};
+      }
+
+      status['details']['tableStructures'] = tableStructures;
+
+      debugPrint('\n=== DATABASE VERIFICATION COMPLETE ===');
+      return status;
+    } catch (e) {
+      status['success'] = false;
+      status['message'] = 'Database connection failed: $e';
+      debugPrint('❌ DATABASE CONNECTION FAILED: $e');
+      return status;
+    }
   }
 }

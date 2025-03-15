@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
 import '../../../controllers/alarm/alarm_controller.dart';
 
 class AlarmSoundsWidget extends StatefulWidget {
@@ -22,56 +21,56 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
       'size': 83.0,
       'colors': [const Color(0xFFEE20D0), null],
       'soundId': 1,
-      'soundPath': 'alarm_sounds/1.wav',
+      'soundPath': 'alarm_sounds/sound_1.wav',
     },
     {
       'alignment': const Alignment(0.66, -0.57),
       'size': 120.0,
       'colors': [const Color(0xFF4b39ef), null],
       'soundId': 2,
-      'soundPath': 'alarm_sounds/2.wav',
+      'soundPath': 'alarm_sounds/sound_2.wav',
     },
     {
       'alignment': const Alignment(0.98, -0.19),
       'size': 109.0,
       'colors': [null, Colors.black],
       'soundId': 3,
-      'soundPath': 'alarm_sounds/3.wav',
+      'soundPath': 'alarm_sounds/sound_3.wav',
     },
     {
       'alignment': const Alignment(-0.96, -0.25),
       'size': 100.0,
       'colors': [Colors.green, null],
       'soundId': 4,
-      'soundPath': 'alarm_sounds/4.wav',
+      'soundPath': 'alarm_sounds/sound_4.wav',
     },
     {
       'alignment': const Alignment(0.11, -0.01),
       'size': 78.0,
       'colors': [Colors.red, null],
       'soundId': 5,
-      'soundPath': 'alarm_sounds/5.wav',
+      'soundPath': 'alarm_sounds/sound_5.wav',
     },
     {
       'alignment': const Alignment(0, -0.27),
       'size': 92.0,
       'colors': [const Color(0xFF620A0B), const Color(0xFF40404D)],
       'soundId': 6,
-      'soundPath': 'alarm_sounds/6.wav',
+      'soundPath': 'alarm_sounds/sound_6.wav',
     },
     {
       'alignment': const Alignment(-0.92, 0.14),
       'size': 121.0,
       'colors': [const Color(0xFF006039), Colors.amber],
       'soundId': 7,
-      'soundPath': 'alarm_sounds/7.wav',
+      'soundPath': 'alarm_sounds/sound_7.wav',
     },
     {
       'alignment': const Alignment(0.61, 0.23),
       'size': 83.0,
       'colors': [null, Colors.green],
       'soundId': 8,
-      'soundPath': 'alarm_sounds/8.wav',
+      'soundPath': 'alarm_sounds/sound_8.wav',
     },
   ];
 
@@ -81,6 +80,7 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
     super.dispose();
   }
 
+  /// preview sound
   Future<void> _playSoundPreview(int soundId) async {
     try {
       await _alarmController.playAlarmSound(soundId, isPreview: true);
@@ -119,14 +119,16 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                           children: [
                             ...List.generate(
                               bubbleConfigs.length,
-                                  (index) => _buildGradientBubble(
+                              (index) => _buildGradientBubble(
                                 context: context,
                                 index: index,
                                 alignment: bubbleConfigs[index]['alignment'],
                                 size: bubbleConfigs[index]['size'],
                                 colors: [
-                                  bubbleConfigs[index]['colors'][0] ?? Theme.of(context).primaryColor,
-                                  bubbleConfigs[index]['colors'][1] ?? Theme.of(context).cardColor,
+                                  bubbleConfigs[index]['colors'][0] ??
+                                      Theme.of(context).primaryColor,
+                                  bubbleConfigs[index]['colors'][1] ??
+                                      Theme.of(context).cardColor,
                                 ],
                               ),
                             ),
@@ -145,12 +147,17 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                     color: const Color(0xFF020202),
                                     borderRadius: BorderRadius.circular(21),
                                     border: Border.all(
-                                      color: Theme.of(context).textTheme.bodyLarge?.color ?? Colors.white,
+                                      color: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.color ??
+                                          Colors.white,
                                     ),
                                   ),
                                   child: const Center(
                                     child: Padding(
-                                      padding: EdgeInsets.only(left: 0, right: 0, top: 0, bottom: 0),
+                                      padding: EdgeInsets.only(
+                                          left: 0, right: 0, top: 0, bottom: 0),
                                       child: Text(
                                         'Press any bubble',
                                         style: TextStyle(
@@ -167,25 +174,33 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                             Align(
                               alignment: const Alignment(0, 1),
                               child: Padding(
-                                padding: const EdgeInsets.fromLTRB(48, 0, 48, 150),
+                                padding:
+                                    const EdgeInsets.fromLTRB(48, 0, 48, 150),
                                 child: ElevatedButton(
                                   onPressed: selectedBubbleIndex != null
                                       ? () {
-                                    final selectedSoundId = bubbleConfigs[selectedBubbleIndex!]['soundId'];
-                                    if (kDebugMode) {
-                                      print('Selected sound ID: $selectedSoundId');
-                                    }
+                                          final selectedSoundId = bubbleConfigs[
+                                              selectedBubbleIndex!]['soundId'];
+                                          if (kDebugMode) {
+                                            print(
+                                                'Selected sound ID: $selectedSoundId');
+                                          }
 
-                                    _alarmController.stopAlarmSound();
-                                    Navigator.of(context).pop(selectedSoundId);
-                                  }
+                                          _alarmController.stopAlarmSound();
+                                          Navigator.of(context)
+                                              .pop(selectedSoundId);
+                                        }
                                       : null,
                                   style: ElevatedButton.styleFrom(
                                     minimumSize: const Size(200, 50),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(25),
                                       side: BorderSide(
-                                        color: Theme.of(context).textTheme.bodyLarge?.color ?? Colors.white,
+                                        color: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.color ??
+                                            Colors.white,
                                       ),
                                     ),
                                   ),
@@ -260,7 +275,9 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isSelected ? Colors.red.withOpacity(0.7) : Colors.black.withOpacity(0.3),
+                  color: isSelected
+                      ? Colors.red.withOpacity(0.7)
+                      : Colors.black.withOpacity(0.3),
                   blurRadius: 10,
                   spreadRadius: 4,
                   offset: const Offset(0, 3),
@@ -269,9 +286,9 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
               shape: BoxShape.circle,
               border: isSelected
                   ? Border.all(
-                color: Theme.of(context).primaryColor.withOpacity(0.5),
-                width: 2,
-              )
+                      color: Theme.of(context).primaryColor.withOpacity(0.5),
+                      width: 2,
+                    )
                   : null,
             ),
           ),

@@ -3,6 +3,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
 
+import '../../../controllers/stats/stats_controller.dart';
+
 class SleepHistoryWidget extends StatefulWidget {
   const SleepHistoryWidget({super.key});
 
@@ -10,13 +12,17 @@ class SleepHistoryWidget extends StatefulWidget {
   SleepHistoryWidgetState createState() => SleepHistoryWidgetState();
 }
 
-class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProviderStateMixin {
+class SleepHistoryWidgetState extends State<SleepHistoryWidget>
+    with TickerProviderStateMixin {
   late TabController _tabController;
   late AnimationController _animationController;
   final List<GlobalKey<AnimatedListState>> _listKeys = [
     GlobalKey<AnimatedListState>(),
     GlobalKey<AnimatedListState>(),
   ];
+
+  final SleepStatisticsController _controller =
+      Get.put(SleepStatisticsController());
 
   @override
   void initState() {
@@ -36,6 +42,8 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _animationController.forward();
+
+      _controller.loadSleepStatistics();
     });
   }
 
@@ -51,7 +59,6 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
     required int index,
     required bool show,
   }) {
-
     final delay = (index * 0.1).clamp(0.0, 1.0);
     final slideAnimation = CurvedAnimation(
       parent: _animationController,
@@ -84,7 +91,10 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
     Color textColor = const Color(0xFF606A85),
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: MediaQuery.of(context).size.width * 0.04,
+        vertical: 6,
+      ),
       child: Container(
         height: 60,
         decoration: BoxDecoration(
@@ -113,6 +123,7 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
                   style: GoogleFonts.inter(
                     color: textColor,
                     fontWeight: FontWeight.w500,
+                    fontSize: MediaQuery.of(context).size.width * 0.035,
                   ),
                 ),
               ),
@@ -122,17 +133,17 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
                   timeRange,
                   textAlign: TextAlign.end,
                   style: GoogleFonts.interTight(
-                    fontSize: 15,
+                    fontSize: MediaQuery.of(context).size.width * 0.035,
                     color: textColor,
                   ),
                 ),
               ),
-              const Align(
+              Align(
                 alignment: Alignment.bottomRight,
                 child: FaIcon(
                   FontAwesomeIcons.bed,
                   color: Colors.black,
-                  size: 20,
+                  size: MediaQuery.of(context).size.width * 0.05,
                 ),
               ),
             ],
@@ -143,10 +154,16 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
   }
 
   Widget _buildTotalHoursCard(String hours) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = screenWidth > 600 ? 200.0 : screenWidth * 0.8;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: MediaQuery.of(context).size.width * 0.04,
+        vertical: 6,
+      ),
       child: Container(
-        width: 100,
+        width: cardWidth,
         height: 120,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -176,7 +193,7 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
                   'Total hours slept',
                   style: GoogleFonts.outfit(
                     color: Colors.black,
-                    fontSize: 13,
+                    fontSize: MediaQuery.of(context).size.width * 0.03,
                     letterSpacing: 0.0,
                     fontWeight: FontWeight.w500,
                   ),
@@ -184,29 +201,32 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
               ),
               Align(
                 alignment: Alignment.center,
-                child: RichText(
-                  textScaleFactor: MediaQuery.of(context).textScaleFactor,
-                  text: TextSpan(
-                    children: [
-                      TextSpan(
-                        text: hours,
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFF15161E),
-                          fontSize: 44,
-                          letterSpacing: 0.0,
-                          fontWeight: FontWeight.normal,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: RichText(
+                    textScaleFactor: MediaQuery.of(context).textScaleFactor,
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: hours,
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF15161E),
+                            fontSize: MediaQuery.of(context).size.width * 0.1,
+                            letterSpacing: 0.0,
+                            fontWeight: FontWeight.normal,
+                          ),
                         ),
-                      ),
-                      TextSpan(
-                        text: ' Hours/Min',
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFF606A85),
-                          fontSize: 14,
-                          letterSpacing: 0.0,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      )
-                    ],
+                        TextSpan(
+                          text: ' Hours/Min',
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF606A85),
+                            fontSize: MediaQuery.of(context).size.width * 0.035,
+                            letterSpacing: 0.0,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -217,7 +237,8 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
     );
   }
 
-  List<Widget> _buildWeekItems(String hours, List<Map<String, dynamic>> dayData) {
+  List<Widget> _buildWeekItems(
+      String hours, List<Map<String, dynamic>> dayData) {
     return [
       _buildAnimatedContainer(
         index: 0,
@@ -241,30 +262,8 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
 
   @override
   Widget build(BuildContext context) {
-    final thisWeekData = [
-      {'day': 'Monday', 'timeRange': 'Set 22:00 / Off 07:00'},
-      {'day': 'Tuesday', 'timeRange': 'Set 23:00 / Off 07:00'},
-      {'day': 'Wednesday', 'timeRange': 'Set 21:30 / Off 07:00'},
-      {'day': 'Thursday', 'timeRange': 'Set 00:00 / Off 07:00'},
-      {
-        'day': 'Friday',
-        'timeRange': 'Set 22:00 / Off 07:00',
-        'backgroundColor': Theme.of(context).primaryColor,
-        'textColor': Colors.white
-      },
-      {'day': 'Saturday', 'timeRange': 'Upcoming day'},
-      {'day': 'Sunday', 'timeRange': 'Upcoming day'},
-    ];
-
-    final lastWeekData = [
-      {'day': 'Monday', 'timeRange': 'Set 23:30 / Off 07:00'},
-      {'day': 'Tuesday', 'timeRange': 'Set 20:00 / Off 06:00'},
-      {'day': 'Wednesday', 'timeRange': 'Set 22:00 / Off 07:00'},
-      {'day': 'Thursday', 'timeRange': 'Set 22:00 / Off 07:00'},
-      {'day': 'Friday', 'timeRange': 'Set 00:00 / Off 07:00'},
-      {'day': 'Saturday', 'timeRange': 'Set 22:00 / Off 07:00'},
-      {'day': 'Sunday', 'timeRange': 'Set 00:00 / Off 05:00'},
-    ];
+    final isTablet = MediaQuery.of(context).size.width >= 600;
+    final isPad = MediaQuery.of(context).size.width >= 768;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -273,50 +272,87 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
         appBar: AppBar(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF15161E)),
+            icon: Icon(
+              Icons.arrow_back_rounded,
+              color: const Color(0xFF15161E),
+              size: MediaQuery.of(context).size.width * 0.06,
+            ),
             onPressed: () => Get.back(),
           ),
           title: Text(
             'Sleep History',
             style: GoogleFonts.outfit(
               color: const Color(0xFF15161E),
-              fontSize: 24,
+              fontSize: isPad
+                  ? 28
+                  : isTablet
+                      ? 26
+                      : 24,
               fontWeight: FontWeight.w500,
             ),
           ),
+          actions: [
+            IconButton(
+              icon: Icon(
+                Icons.refresh,
+                color: const Color(0xFF15161E),
+                size: MediaQuery.of(context).size.width * 0.06,
+              ),
+              onPressed: () => _controller.refreshSleepStatistics(),
+            ),
+          ],
           elevation: 0,
         ),
         body: SafeArea(
           child: Column(
             children: [
               Container(
-                margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                margin: EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: MediaQuery.of(context).size.width * 0.04,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F4F8),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: TabBar(
                   controller: _tabController,
-                  tabs: const [
+                  tabs: [
                     Tab(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        child: Text('This Week'),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isTablet ? 24 : 16,
+                          vertical: 10,
+                        ),
+                        child: Text(
+                          'This Week',
+                          style: TextStyle(
+                            fontSize: MediaQuery.of(context).size.width * 0.035,
+                          ),
+                        ),
                       ),
                     ),
                     Tab(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        child: Text('Last Week'),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isTablet ? 24 : 16,
+                          vertical: 10,
+                        ),
+                        child: Text(
+                          'Last Week',
+                          style: TextStyle(
+                            fontSize: MediaQuery.of(context).size.width * 0.035,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                   labelStyle: GoogleFonts.figtree(
-                    fontSize: 16,
+                    fontSize: isTablet ? 18 : 16,
                     fontWeight: FontWeight.w600,
                   ),
                   unselectedLabelStyle: GoogleFonts.figtree(
-                    fontSize: 16,
+                    fontSize: isTablet ? 18 : 16,
                     fontWeight: FontWeight.w500,
                   ),
                   labelColor: Colors.white,
@@ -330,20 +366,127 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget> with TickerProvi
                 ),
               ),
               Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    // This Week Tab
-                    ListView(
-                      key: _listKeys[0],
-                      children: _buildWeekItems('42,18', thisWeekData),
-                    ),
-                    // Last Week Tab
-                    ListView(
-                      key: _listKeys[1],
-                      children: _buildWeekItems('57,15', lastWeekData),
-                    ),
-                  ],
+                child: GetX<SleepStatisticsController>(
+                  builder: (controller) {
+                    if (isTablet) {
+                      return TabBarView(
+                        controller: _tabController,
+                        children: [
+                          CustomScrollView(
+                            key: _listKeys[0],
+                            slivers: [
+                              SliverToBoxAdapter(
+                                child: _buildAnimatedContainer(
+                                  index: 0,
+                                  show: true,
+                                  child: _buildTotalHoursCard(
+                                      controller.thisWeekTotalHours.value),
+                                ),
+                              ),
+                              SliverPadding(
+                                padding: const EdgeInsets.all(8.0),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: isPad ? 3 : 2,
+                                    childAspectRatio: 2.5,
+                                    crossAxisSpacing: 8,
+                                    mainAxisSpacing: 8,
+                                  ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) {
+                                      final data =
+                                          controller.thisWeekSleepData[index];
+                                      return _buildAnimatedContainer(
+                                        index: index + 1,
+                                        show: true,
+                                        child: _buildDayContainer(
+                                          day: data['day'],
+                                          timeRange: data['timeRange'],
+                                          backgroundColor:
+                                              data['backgroundColor'] ??
+                                                  Colors.white,
+                                          textColor: data['textColor'] ??
+                                              const Color(0xFF000000),
+                                        ),
+                                      );
+                                    },
+                                    childCount:
+                                        controller.thisWeekSleepData.length,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          CustomScrollView(
+                            key: _listKeys[1],
+                            slivers: [
+                              SliverToBoxAdapter(
+                                child: _buildAnimatedContainer(
+                                  index: 0,
+                                  show: true,
+                                  child: _buildTotalHoursCard(
+                                      controller.lastWeekTotalHours.value),
+                                ),
+                              ),
+                              SliverPadding(
+                                padding: const EdgeInsets.all(8.0),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: isPad ? 3 : 2,
+                                    childAspectRatio: 2.5,
+                                    crossAxisSpacing: 8,
+                                    mainAxisSpacing: 8,
+                                  ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) {
+                                      final data =
+                                          controller.lastWeekSleepData[index];
+                                      return _buildAnimatedContainer(
+                                        index: index + 1,
+                                        show: true,
+                                        child: _buildDayContainer(
+                                          day: data['day'],
+                                          timeRange: data['timeRange'],
+                                          backgroundColor:
+                                              data['backgroundColor'] ??
+                                                  Colors.white,
+                                          textColor: data['textColor'] ??
+                                              const Color(0xFF000000),
+                                        ),
+                                      );
+                                    },
+                                    childCount:
+                                        controller.lastWeekSleepData.length,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+                    return TabBarView(
+                      controller: _tabController,
+                      children: [
+                        ListView(
+                          key: _listKeys[0],
+                          children: _buildWeekItems(
+                            controller.thisWeekTotalHours.value,
+                            controller.thisWeekSleepData,
+                          ),
+                        ),
+                        ListView(
+                          key: _listKeys[1],
+                          children: _buildWeekItems(
+                            controller.lastWeekTotalHours.value,
+                            controller.lastWeekSleepData,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
