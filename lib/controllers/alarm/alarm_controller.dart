@@ -326,7 +326,7 @@ class AlarmController extends GetxController {
   /// Starts NFC verification for the specified alarm
   Future<bool> verifyNfcForAlarm(int alarmId) async {
     try {
-      final nfcController = Get.find<NFCController>();
+      final nfcController = Get.put(NFCController());
       final result = await nfcController.startAlarmVerification(alarmId);
       return result;
     } catch (e) {
@@ -590,7 +590,7 @@ class AlarmController extends GetxController {
 
       await stopAlarmAndUpdateState(alarm);
 
-      final nfcController = Get.find<NFCController>();
+      final nfcController = Get.put(NFCController());
       nfcController.verificationSuccess.value = true;
 
       debugPrint('Alarm $alarmId stopped successfully');

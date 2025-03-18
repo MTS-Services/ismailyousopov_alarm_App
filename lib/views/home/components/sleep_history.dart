@@ -123,7 +123,7 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget>
                   style: GoogleFonts.inter(
                     color: textColor,
                     fontWeight: FontWeight.w500,
-                    fontSize: MediaQuery.of(context).size.width * 0.035,
+                    fontSize: MediaQuery.of(context).size.width * 0.025,
                   ),
                 ),
               ),

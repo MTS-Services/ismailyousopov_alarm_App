@@ -133,7 +133,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     if (time == null) return const Text('');
 
     final hour =
-        time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.hour >= 12 ? 'PM' : 'AM';
 
@@ -226,8 +226,8 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     if (_isLoading) {
       return Center(
           child: CircularProgressIndicator(
-        color: Theme.of(context).primaryColor,
-      ));
+            color: Theme.of(context).primaryColor,
+          ));
     }
 
     if (_alarms.isEmpty) {
@@ -253,67 +253,46 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
 
   /// Builds an individual alarm card with time display and action buttons
   Widget _buildAlarmCard(AlarmModel alarm) {
-    // Get screen size to calculate responsive values
     final screenWidth = MediaQuery.of(context).size.width;
+    final scaleFactor = screenWidth < 320 ? 0.75 :
+    screenWidth < 360 ? 0.85 :
+    screenWidth < 400 ? 0.95 : 1.0;
 
-    // Calculate scaling factor based on screen width
-    final scaleFactor = screenWidth < 360
-        ? 0.8
-        : screenWidth < 400
-            ? 0.9
-            : 1.0;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 340;
-
-        return Material(
-          color: Colors.transparent,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    return Material(
+      color: Colors.transparent,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(16 * scaleFactor),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(left: 22 * scaleFactor),
+                child: _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
+              ),
+              _buildActionButtons(alarm, scaleFactor: scaleFactor),
+            ],
           ),
-          child: Container(
-            width: constraints.maxWidth,
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(16 * scaleFactor),
-              child: isNarrow
-                  ? Column(
-                      children: [
-                        Center(
-                          child: _formatTimeWidget(alarm.time,
-                              scaleFactor: scaleFactor),
-                        ),
-                        SizedBox(height: 16 * scaleFactor),
-                        _buildActionButtons(alarm, scaleFactor: scaleFactor),
-                      ],
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.only(left: 22 * scaleFactor),
-                          child: _formatTimeWidget(alarm.time,
-                              scaleFactor: scaleFactor),
-                        ),
-                        _buildActionButtons(alarm, scaleFactor: scaleFactor),
-                      ],
-                    ),
-            ),
-          ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   /// Builds action buttons (Delete and Use)
   Widget _buildActionButtons(AlarmModel alarm, {double scaleFactor = 1.0}) {
     final buttonHeight = 36.0 * scaleFactor;
-    final buttonWidth = 80.0 * scaleFactor;
+    final buttonWidth = max(70.0 * scaleFactor, 60.0);
+    final fontSize = 14.0 * scaleFactor;
+    final horizontalPadding = 8.0 * scaleFactor;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -322,7 +301,10 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
           onPressed: () => _deleteAlarm(alarm.id),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.black,
-            padding: EdgeInsets.all(8 * scaleFactor),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: horizontalPadding / 2,
+            ),
             minimumSize: Size(buttonWidth, buttonHeight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18 * scaleFactor),
@@ -337,7 +319,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
                 fontFamily: 'Inter',
                 color: const Color(0xFFF9F8F8),
                 fontWeight: FontWeight.w800,
-                fontSize: 14 * scaleFactor,
+                fontSize: fontSize,
               ),
             ),
           ),
@@ -347,7 +329,10 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
           onPressed: () => _reuseAlarm(alarm),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
-            padding: EdgeInsets.all(8 * scaleFactor),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: horizontalPadding / 2,
+            ),
             minimumSize: Size(buttonWidth, buttonHeight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18 * scaleFactor),
@@ -362,7 +347,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
                 fontFamily: 'Inter',
                 color: Theme.of(context).textTheme.bodyMedium?.color,
                 fontWeight: FontWeight.w800,
-                fontSize: 14 * scaleFactor,
+                fontSize: fontSize,
               ),
             ),
           ),
@@ -386,4 +371,9 @@ extension WidgetListExtension on List<Widget> {
     }
     return newList;
   }
+}
+
+
+double max(double a, double b) {
+  return a > b ? a : b;
 }

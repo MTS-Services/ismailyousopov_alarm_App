@@ -158,7 +158,7 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
                       'Turn Off Alarm',
                       style: GoogleFonts.inter(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -207,13 +207,13 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
                         const Icon(
                           Icons.warning_amber_rounded,
                           size: 36,
-                          color: Colors.amber,
+                          color: Colors.black,
                         ),
                         const SizedBox(width: 8),
                         Text(
                           'Help!',
                           style: GoogleFonts.inter(
-                            color: Colors.white,
+                            color: Colors.black,
                             fontSize: isSmallScreen ? 20 : 24,
                             fontWeight: FontWeight.w600,
                           ),

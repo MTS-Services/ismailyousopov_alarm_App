@@ -97,8 +97,6 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.hour >= 12 ? 'PM' : 'AM';
-
-    // Responsive font sizes based on screen width
     final timeFontSize = 35.0 * scaleFactor;
     final periodFontSize = 10.0 * scaleFactor;
 
@@ -238,76 +236,62 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
 
   /// Builds an individual alarm card with time display, days indicator and action buttons
   Widget _buildAlarmCard(AlarmModel alarm) {
-
     final screenWidth = MediaQuery.of(context).size.width;
+    final scaleFactor = screenWidth < 320 ? 0.75 :
+    screenWidth < 360 ? 0.85 :
+    screenWidth < 400 ? 0.95 : 1.0;
 
-    final scaleFactor = screenWidth < 360 ? 0.8 :
-    screenWidth < 400 ? 0.9 : 1.0;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 340;
-
-        return Material(
-          color: Colors.transparent,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            width: constraints.maxWidth,
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(16 * scaleFactor),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Material(
+      color: Colors.transparent,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(16 * scaleFactor),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Always use Row layout for consistent design across all devices
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  isNarrow
-                      ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
-                      const SizedBox(height: 12),
-                      _buildActionButtons(alarm, scaleFactor: scaleFactor),
-                    ],
-                  )
-                      : Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(left: 22 * scaleFactor),
-                        child: _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
-                      ),
-                      _buildActionButtons(alarm, scaleFactor: scaleFactor),
-                    ],
+                  Padding(
+                    padding: EdgeInsets.only(left: 22 * scaleFactor),
+                    child: _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
                   ),
-                  if (alarm.daysActive.isNotEmpty &&
-                      alarm.daysActive.first.isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        left: isNarrow ? 0 : 22 * scaleFactor,
-                        top: 8 * scaleFactor,
-                      ),
-                      child: Center(
-                        child: _buildDaysIndicator(alarm, scaleFactor: scaleFactor),
-                      ),
-                    ),
+                  _buildActionButtons(alarm, scaleFactor: scaleFactor),
                 ],
               ),
-            ),
+              if (alarm.daysActive.isNotEmpty && alarm.daysActive.first.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: 22 * scaleFactor,
+                    top: 8 * scaleFactor,
+                  ),
+                  child: Center(
+                    child: _buildDaysIndicator(alarm, scaleFactor: scaleFactor),
+                  ),
+                ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   /// Builds action buttons (Cancel and Edit)
   Widget _buildActionButtons(AlarmModel alarm, {double scaleFactor = 1.0}) {
     final buttonHeight = 36.0 * scaleFactor;
-    final buttonWidth = 80.0 * scaleFactor;
+    final buttonWidth = max(70.0 * scaleFactor, 60.0);
+    final fontSize = 14.0 * scaleFactor;
+    final horizontalPadding = 8.0 * scaleFactor;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -316,7 +300,10 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
           onPressed: () => _cancelAlarm(alarm),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.black,
-            padding: EdgeInsets.all(8 * scaleFactor),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: horizontalPadding / 2,
+            ),
             minimumSize: Size(buttonWidth, buttonHeight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18 * scaleFactor),
@@ -331,7 +318,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
                 fontFamily: 'Inter',
                 color: const Color(0xFFF9F8F8),
                 fontWeight: FontWeight.w800,
-                fontSize: 14 * scaleFactor,
+                fontSize: fontSize,
               ),
             ),
           ),
@@ -341,7 +328,10 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
           onPressed: () => _editAlarm(alarm),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
-            padding: EdgeInsets.all(8 * scaleFactor),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: horizontalPadding / 2,
+            ),
             minimumSize: Size(buttonWidth, buttonHeight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18 * scaleFactor),
@@ -356,7 +346,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
                 fontFamily: 'Inter',
                 color: Theme.of(context).textTheme.bodyMedium?.color,
                 fontWeight: FontWeight.w800,
-                fontSize: 14 * scaleFactor,
+                fontSize: fontSize,
               ),
             ),
           ),
@@ -364,4 +354,9 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
       ],
     );
   }
+}
+
+
+double max(double a, double b) {
+  return a > b ? a : b;
 }

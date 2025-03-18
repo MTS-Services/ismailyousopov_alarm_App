@@ -470,7 +470,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                           'Cancel',
                           style: GoogleFonts.inter(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: 12,
                           ),
                         ),
                       ),
@@ -488,7 +488,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                           _isEditing ? 'Update' : 'Save',
                           style: GoogleFonts.inter(
                             color: Colors.black,
-                            fontSize: 16,
+                            fontSize: 10,
                           ),
                         ),
                       ),

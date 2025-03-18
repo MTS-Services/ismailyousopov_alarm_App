@@ -31,7 +31,7 @@ class OnboardingButton extends StatelessWidget {
           text,
           style: GoogleFonts.interTight(
             color: Colors.black,
-            fontSize: 16,
+            fontSize: 12,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.0,
           ),

@@ -12,6 +12,7 @@ import 'package:alarm/views/home/components/scan_nfc.dart';
 import 'package:alarm/views/home/home_screen.dart';
 import 'package:alarm/views/onboarding/onboarding_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:get/get.dart';
 import 'core/constants/asset_constants.dart';
 import 'core/database/database_helper.dart';
@@ -19,11 +20,13 @@ import 'core/services/alarm_background_service.dart';
 import 'core/theme/app_theme.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   final dbHelper = DatabaseHelper();
   await dbHelper.verifyDatabaseConnection();
-  await NotificationService.initialize();
   await AlarmBackgroundService.initializeService();
+  await NotificationService.initialize();
+  FlutterNativeSplash.remove();
   runApp(const MyApp());
 }
 
