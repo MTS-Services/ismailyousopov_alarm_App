@@ -48,6 +48,10 @@ dependencies:
   intl: ^0.20.2
   flutter_background_service: ^5.1.0
   flutter_native_splash: ^2.4.4
+  wakelock_plus: ^1.2.10
+  synchronized: ^3.3.0+3
+  android_alarm_manager_plus: ^4.0.7
+
 
 dev_dependencies:
   flutter_test:

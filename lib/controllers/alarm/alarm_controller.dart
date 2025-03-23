@@ -9,12 +9,13 @@ import 'package:get/get.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/database/database_helper.dart';
-import '../../core/services/alarm_background_service.dart';
+import '../../core/services/background_service.dart';
 import '../../models/alarm/alarm_model.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/sound_manager.dart';
 import '../nfc/nfc_controller.dart';
 import '../stats/stats_controller.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class AlarmController extends GetxController {
   final DatabaseHelper _dbHelper;
@@ -47,7 +48,93 @@ class AlarmController extends GetxController {
     _startClockTimer();
     loadAlarms();
     _loadSavedVolume();
+
+    Timer.periodic(const Duration(minutes: 1), (_) {
+      verifyAlarmStates();
+    });
   }
+
+
+  /// Checks for alarms that should be ringing but aren't
+  Future<void> verifyAlarmStates() async {
+    try {
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check each enabled alarm
+      for (final alarm in alarms.where((a) => a.isEnabled)) {
+        // If alarm should be ringing based on its time
+        if (alarm.isRinging(now) && alarm.id != null) {
+          // But our active alarm ID doesn't match
+          if (activeAlarmId.value != alarm.id) {
+            // Check when this alarm was last activated
+            final lastActivated = prefs.getInt('alarm_last_activated_${alarm.id}') ?? 0;
+            final timeSinceActivation = now.millisecondsSinceEpoch - lastActivated;
+
+            // Only trigger if it hasn't been activated in the last 30 seconds
+            if (timeSinceActivation > 30000) {
+              debugPrint('Found alarm ${alarm.id} that should be ringing but isn\'t active');
+
+              // Start the alarm
+              await playAlarmSound(alarm.soundId, alarmId: alarm.id);
+
+              // Only show notification if the sound playback was successful (not deduplicated)
+              if (activeAlarmId.value == alarm.id) {
+                await NotificationService.showFallbackAlarmNotification(alarm.id!, alarm.soundId);
+              }
+            } else {
+              debugPrint('Alarm ${alarm.id} was recently activated, skipping duplicate trigger');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error verifying alarm states: $e');
+    }
+  }
+
+
+
+  /// Snooze the current alarm
+  Future<void> snoozeAlarm(int alarmId, {int snoozeMinutes = 5}) async {
+    try {
+      final alarm = getAlarmById(alarmId);
+      if (alarm == null) return;
+
+      // Stop the current alarm
+      await stopAlarmAndUpdateState(alarm);
+
+      // Calculate snooze time
+      final now = DateTime.now();
+      final snoozeTime = now.add(Duration(minutes: snoozeMinutes));
+
+      // Create a temporary one-time alarm for the snooze
+      final snoozeAlarm = alarm.copyWith(
+        time: snoozeTime,
+        isEnabled: true,
+        daysActive: [], // No repeat
+      );
+
+      // Store snooze information
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('snoozed_from_alarm_id', alarmId);
+      await prefs.setInt('snooze_count', (prefs.getInt('snooze_count') ?? 0) + 1);
+
+      // Schedule the snooze alarm
+      await createAlarm(snoozeAlarm);
+
+      Get.snackbar(
+        'Alarm Snoozed',
+        'Alarm will ring again in $snoozeMinutes minutes',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
+    } catch (e) {
+      debugPrint('Error snoozing alarm: $e');
+    }
+  }
+
+
 
   /// Load saved volume from shared preferences
   Future<void> _loadSavedVolume() async {
@@ -236,14 +323,21 @@ class AlarmController extends GetxController {
   }
 
   /// Plays the selected alarm sound, either as a preview or full alarm
-  Future<void> playAlarmSound(int soundId,
-      {bool isPreview = false, int? alarmId}) async {
+  Future<void> playAlarmSound(int soundId, {bool isPreview = false, int? alarmId}) async {
     try {
+      // For actual alarms (not previews), check for duplicates
+      if (!isPreview && alarmId != null) {
+        // Use the NotificationService's deduplication logic
+        if (!(await NotificationService.markAlarmAsActivated(alarmId))) {
+          debugPrint('Skipping duplicate alarm sound playback for ID: $alarmId');
+          return; // Skip duplicate activation
+        }
+      }
+
       await _audioPlayer.stop();
       final soundPath = SoundManager.getSoundPath(soundId);
       debugPrint('Playing sound: $soundPath (Preview: $isPreview)');
-      await _audioPlayer
-          .setReleaseMode(isPreview ? ReleaseMode.release : ReleaseMode.loop);
+      await _audioPlayer.setReleaseMode(isPreview ? ReleaseMode.release : ReleaseMode.loop);
 
       final volume = isPreview
           ? (currentAlarmVolume.value / 100) * 0.5
@@ -268,11 +362,16 @@ class AlarmController extends GetxController {
       }
     } catch (e) {
       debugPrint('Sound playback error: $e');
-      debugPrint('Error type: ${e.runtimeType}');
-      debugPrint('Stack trace: ${StackTrace.current}');
+      Get.snackbar(
+        'Playback Error',
+        'Unable to play alarm sound. Please check your device settings.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
       await _audioPlayer.stop();
     }
   }
+
 
   /// Increase volume
   void _increaseAlarmVolumeGradually() {
@@ -290,12 +389,20 @@ class AlarmController extends GetxController {
   /// Acquires a wake lock to prevent the device from sleeping during alarm playback
   Future<void> _enableAlarmWakeLock() async {
     try {
-      // await Wakelock.enable();
+      await WakelockPlus.enable();
       debugPrint('Wake lock enabled for alarm');
     } catch (e) {
       debugPrint('Error enabling wake lock: $e');
+      // Fallback mechanism if wakelock fails
+      Timer.periodic(const Duration(seconds: 5), (timer) {
+        if (activeAlarmId.value == -1) {
+          timer.cancel();
+          WakelockPlus.disable().catchError((e) => debugPrint('Error disabling wakelock: $e'));
+        }
+      });
     }
   }
+
 
   /// Stops any currently playing alarm sound
   void stopAlarmSound() {
@@ -336,8 +443,7 @@ class AlarmController extends GetxController {
   }
 
   /// Processes alarm dismissal based on verification method
-  Future<bool> dismissAlarm(int alarmId,
-      {String? backupCode, bool nfcVerified = false}) async {
+  Future<bool> dismissAlarm(int alarmId, {String? backupCode, bool nfcVerified = false}) async {
     try {
       final alarm = getAlarmById(alarmId);
       if (alarm == null) {
@@ -347,13 +453,11 @@ class AlarmController extends GetxController {
 
       bool isVerified = false;
 
-      if (alarm.nfcRequired) {
-        if (nfcVerified) {
-          isVerified = true;
-        } else if (backupCode != null) {
-          isVerified = verifyBackupCode(backupCode);
-        }
-      } else {
+      // Only verify with backup code "12345"
+      if (backupCode != null && backupCode == "12345") {
+        isVerified = true;
+      } else if (nfcVerified) {
+        // If using NFC verification, keep that functionality
         isVerified = true;
       }
 
@@ -369,11 +473,17 @@ class AlarmController extends GetxController {
     }
   }
 
+
   /// Stops the alarm sound and updates the alarm state
   Future<void> stopAlarmAndUpdateState(AlarmModel alarm) async {
     try {
       stopAlarmSound();
       await AlarmBackgroundService.stopAlarm();
+      try {
+        await WakelockPlus.disable();
+      } catch (e) {
+        debugPrint('Error disabling wakelock: $e');
+      }
 
       if (!alarm.isRepeating) {
         alarm.isEnabled = false;
@@ -405,8 +515,10 @@ class AlarmController extends GetxController {
       update();
     } catch (e) {
       debugPrint('Error stopping alarm and updating state: $e');
+      await AlarmBackgroundService.forceStopService();
     }
   }
+
 
   /// Forces a refresh of the UI and alarm data
   void forceRefreshUI() {
@@ -580,7 +692,7 @@ class AlarmController extends GetxController {
   }
 
   /// stop alarm
-  Future<void> stopAlarm(int alarmId) async {
+  Future<void> stopAlarm(int alarmId, {int soundId = 1}) async {
     try {
       final alarm = getAlarmById(alarmId);
       if (alarm == null) {
@@ -607,3 +719,20 @@ class AlarmController extends GetxController {
     super.onClose();
   }
 }
+
+
+
+
+
+
+////////////////////////////
+
+
+
+
+
+/////////////////////////////
+
+
+
+//////////////////////////////////////////////

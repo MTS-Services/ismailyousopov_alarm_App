@@ -1,511 +1,799 @@
-// import 'dart:async';
-// import 'package:alarm/core/constants/asset_constants.dart';
-// import 'package:alarm/core/services/sound_manager.dart';
-// import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-// import 'package:timezone/data/latest.dart' as tz;
-// import 'package:timezone/timezone.dart' as tz;
-// import 'package:flutter/material.dart';
-// import 'package:get/get.dart';
-// import 'dart:typed_data';
-// import '../../controllers/alarm/alarm_controller.dart';
-// import 'alarm_background_service.dart';
-//
-// class NotificationService {
-//   static final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-//       FlutterLocalNotificationsPlugin();
-//   static const String stopActionId = 'stop_alarm_action';
-//
-//   /// Initialize the notification service
-//   static Future<void> initialize() async {
-//     tz.initializeTimeZones();
-//     const AndroidInitializationSettings initializationSettingsAndroid =
-//         AndroidInitializationSettings('mipmap/ic_launcher');
-//     const DarwinInitializationSettings initializationSettingsIOS =
-//         DarwinInitializationSettings(
-//       requestSoundPermission: true,
-//       requestBadgePermission: true,
-//       requestAlertPermission: true,
-//     );
-//     const InitializationSettings initializationSettings =
-//         InitializationSettings(
-//       android: initializationSettingsAndroid,
-//       iOS: initializationSettingsIOS,
-//     );
-//     await flutterLocalNotificationsPlugin.initialize(
-//       initializationSettings,
-//       onDidReceiveNotificationResponse: onNotificationTap,
-//       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-//     );
-//     await _cleanupAllNotificationChannels();
-//     await requestPermissions();
-//     await setupNotificationTriggerListener();
-//   }
-//
-//   /// Setup a listener to start the background service when notifications are triggered
-//   static Future<void> setupNotificationTriggerListener() async {
-//     final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-//         flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-//             AndroidFlutterLocalNotificationsPlugin>();
-//
-//     if (androidPlugin != null) {
-//       final bool? granted = await androidPlugin.areNotificationsEnabled();
-//       if (granted != true) {
-//         await androidPlugin.requestNotificationsPermission();
-//       }
-//     }
-//
-//     final NotificationAppLaunchDetails? launchDetails =
-//         await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-//
-//     if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
-//       final String? payload = launchDetails.notificationResponse?.payload;
-//       if (payload != null) {
-//         final List<String> payloadParts = payload.split(':');
-//         final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
-//         final int soundId =
-//             payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
-//         _startAlarmSoundService(alarmId, soundId);
-//       }
-//     }
-//   }
-//
-//   /// Clean up all notification channels to prevent duplicates
-//   static Future<void> _cleanupAllNotificationChannels() async {
-//     final channels = await flutterLocalNotificationsPlugin
-//         .resolvePlatformSpecificImplementation<
-//             AndroidFlutterLocalNotificationsPlugin>()
-//         ?.getNotificationChannels();
-//
-//     for (final channel in channels ?? []) {
-//       await flutterLocalNotificationsPlugin
-//           .resolvePlatformSpecificImplementation<
-//               AndroidFlutterLocalNotificationsPlugin>()
-//           ?.deleteNotificationChannel(channel.id);
-//     }
-//   }
-//
-//   /// Create a notification channel for a specific sound
-//   static Future<String> _createNotificationChannelForSound(int soundId) async {
-//     final String androidSoundName =
-//         SoundManager.getNotificationSoundName(soundId);
-//
-//     final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-//     final String channelId = 'alarm_channel_sound_${soundId}_$timestamp';
-//     final String channelName =
-//         'Alarm Sound: ${SoundManager.getSoundName(soundId)}';
-//
-//     final AndroidNotificationChannel alarmChannel = AndroidNotificationChannel(
-//       channelId,
-//       channelName,
-//       description:
-//           'Alarm notifications with sound: ${SoundManager.getSoundName(soundId)}',
-//       importance: Importance.max,
-//       playSound: true,
-//       sound: RawResourceAndroidNotificationSound(androidSoundName),
-//       enableVibration: true,
-//       enableLights: true,
-//     );
-//
-//     await flutterLocalNotificationsPlugin
-//         .resolvePlatformSpecificImplementation<
-//             AndroidFlutterLocalNotificationsPlugin>()
-//         ?.createNotificationChannel(alarmChannel);
-//
-//     return channelId;
-//   }
-//
-//   /// Handle notification tap events
-//   static void onNotificationTap(NotificationResponse notificationResponse) {
-//     final String? payload = notificationResponse.payload;
-//     final String? actionId = notificationResponse.actionId;
-//
-//     if (payload == null) return;
-//
-//     final List<String> payloadParts = payload.split(':');
-//     final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
-//
-//     final int soundId =
-//         payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
-//
-//     _startAlarmSoundService(alarmId, soundId);
-//
-//     if (actionId == stopActionId || payload.isNotEmpty) {
-//       final alarmController = Get.find<AlarmController>();
-//       final alarm = alarmController.getAlarmById(alarmId);
-//
-//       if (alarm != null && alarm.nfcRequired) {
-//         Get.toNamed(
-//           AppConstants.nfcScan,
-//           arguments: {'alarmId': alarmId},
-//         );
-//       } else {
-//         Get.toNamed(
-//           AppConstants.stopAlarm,
-//           arguments: {'alarmId': alarmId},
-//         );
-//       }
-//     }
-//   }
-//
-//   /// Handle background notification tap events
-//   @pragma('vm:entry-point')
-//   static void notificationTapBackground(
-//       NotificationResponse notificationResponse) {
-//     final String? payload = notificationResponse.payload;
-//
-//     if (payload != null) {
-//       final List<String> payloadParts = payload.split(':');
-//       final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
-//       final int soundId =
-//           payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
-//
-//       AlarmBackgroundService.startAlarm(alarmId, soundId);
-//     }
-//   }
-//
-//   /// Schedule an alarm notification
-//   static Future<void> scheduleAlarmNotification({
-//     required int id,
-//     required DateTime scheduledTime,
-//     required int soundId,
-//     required bool nfcRequired,
-//     String? title,
-//     String? body,
-//     String? subtitle,
-//   }) async {
-//     try {
-//       final String channelId =
-//           await _createNotificationChannelForSound(soundId);
-//       final String androidSoundName =
-//           SoundManager.getNotificationSoundName(soundId);
-//       final String iosSoundName = SoundManager.getIOSNotificationSound(soundId);
-//
-//       final List<AndroidNotificationAction> actions = [
-//         const AndroidNotificationAction(
-//           stopActionId,
-//           'Stop Alarm',
-//           showsUserInterface: true,
-//         ),
-//       ];
-//
-//       final bodyText = nfcRequired
-//           ? 'Time to wake up! Scan your NFC tag to stop the alarm.'
-//           : 'Time to wake up! Tap to stop the alarm.';
-//
-//       final Duration timeUntilAlarm = scheduledTime.difference(DateTime.now());
-//       if (timeUntilAlarm.inSeconds > 0) {
-//         Timer(timeUntilAlarm, () {
-//           AlarmBackgroundService.startAlarm(id, soundId);
-//         });
-//       }
-//
-//       await flutterLocalNotificationsPlugin.zonedSchedule(
-//         id,
-//         title ?? 'Alarm',
-//         body ?? bodyText,
-//         tz.TZDateTime.from(scheduledTime, tz.local),
-//         NotificationDetails(
-//           android: AndroidNotificationDetails(
-//             channelId,
-//             'Alarm Sound: ${SoundManager.getSoundName(soundId)}',
-//             channelDescription:
-//                 'Alarm notifications with sound: ${SoundManager.getSoundName(soundId)}',
-//             importance: Importance.max,
-//             priority: Priority.high,
-//             autoCancel: false,
-//             ongoing: true,
-//             playSound: false,
-//             sound: RawResourceAndroidNotificationSound(androidSoundName),
-//             category: AndroidNotificationCategory.alarm,
-//             fullScreenIntent: true,
-//             styleInformation: BigTextStyleInformation(
-//               bodyText,
-//               htmlFormatBigText: true,
-//               contentTitle: 'Alarm',
-//               htmlFormatContentTitle: true,
-//               summaryText: 'Alarm notification',
-//               htmlFormatSummaryText: true,
-//             ),
-//             actions: actions,
-//             color: Colors.red,
-//             colorized: true,
-//             visibility: NotificationVisibility.public,
-//           ),
-//           iOS: DarwinNotificationDetails(
-//             presentAlert: true,
-//             presentSound: false,
-//             sound: iosSoundName,
-//             interruptionLevel: InterruptionLevel.critical,
-//             threadIdentifier: 'alarm_thread',
-//             subtitle:
-//                 subtitle ?? (nfcRequired ? 'Scan NFC to stop' : 'Tap to stop'),
-//             categoryIdentifier: 'alarm_category',
-//           ),
-//         ),
-//         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-//         uiLocalNotificationDateInterpretation:
-//             UILocalNotificationDateInterpretation.absoluteTime,
-//         payload: "$id:$soundId",
-//       );
-//     } catch (e) {
-//       debugPrint('Error scheduling notification: $e');
-//     }
-//   }
-//
-//   /// Starts the background service to play alarm sound with the specified ID and sound.
-//   static Future<void> _startAlarmSoundService(int alarmId, int soundId) async {
-//     try {
-//       await AlarmBackgroundService.startAlarm(alarmId, soundId);
-//     } catch (e) {
-//       debugPrint('Error starting alarm sound service: $e');
-//       await flutterLocalNotificationsPlugin.show(
-//         alarmId,
-//         'Alarm',
-//         'Time to wake up!',
-//         NotificationDetails(
-//           android: AndroidNotificationDetails(
-//             'alarm_fallback_channel',
-//             'Alarm Fallback Channel',
-//             channelDescription: 'Used when background service fails',
-//             importance: Importance.max,
-//             priority: Priority.high,
-//             enableVibration: true,
-//             vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
-//             fullScreenIntent: true,
-//           ),
-//           iOS: const DarwinNotificationDetails(
-//             presentAlert: true,
-//             presentSound: true,
-//             interruptionLevel: InterruptionLevel.critical,
-//           ),
-//         ),
-//       );
-//     }
-//   }
-//
-//   /// Cancel a specific notification
-//   static Future<void> cancelNotification(int id) async {
-//     await flutterLocalNotificationsPlugin.cancel(id);
-//   }
-//
-//   /// Cancel all notifications
-//   static Future<void> cancelAllNotifications() async {
-//     await flutterLocalNotificationsPlugin.cancelAll();
-//   }
-//
-//   /// Check if notifications are permitted
-//   static Future<bool> areNotificationsEnabled() async {
-//     final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-//         flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-//             AndroidFlutterLocalNotificationsPlugin>();
-//     final bool? permitted = await androidPlugin?.areNotificationsEnabled();
-//     return permitted ?? false;
-//   }
-//
-//   /// Request notification permissions
-//   static Future<void> requestPermissions() async {
-//     final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-//         flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-//             AndroidFlutterLocalNotificationsPlugin>();
-//     await androidPlugin?.requestNotificationsPermission();
-//     await flutterLocalNotificationsPlugin
-//         .resolvePlatformSpecificImplementation<
-//             IOSFlutterLocalNotificationsPlugin>()
-//         ?.requestPermissions(
-//           alert: true,
-//           badge: true,
-//           sound: true,
-//           critical: true,
-//         );
-//   }
-// }
-
 import 'dart:async';
+import 'dart:io';
+import 'dart:math';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:alarm/core/constants/asset_constants.dart';
 import 'package:alarm/core/services/sound_manager.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:get/get.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'dart:typed_data';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../controllers/alarm/alarm_controller.dart';
-import 'alarm_background_service.dart';
+import '../../models/alarm/alarm_model.dart';
+import 'background_service.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
   static const String stopActionId = 'stop_alarm_action';
-  // Add a list of channels that should not be deleted
-  static const List<String> reservedChannels = ['alarm_foreground_service'];
+  static const List<String> reservedChannels = [
+    'alarm_foreground_service',
+    'alarm_fallback_channel'
+  ];
 
-  /// Initialize the notification service
+  static final Set<int> _activeNotificationIds = {};
+  static final Map<int, AudioPlayer> _fallbackPlayers = {};
+  static Timer? _permissionRetryTimer;
+  static final Map<int, int> _alarmActivationTimestamps = {};
+
+  /// shows fallback alarm notification
+  static Future<void> showFallbackAlarmNotification(
+      int alarmId, int soundId) async {
+    try {
+      debugPrint('Showing fallback alarm notification for ID: $alarmId');
+      if (Platform.isAndroid) {
+        try {
+          final bool isNativeActive =
+              await const MethodChannel('com.example.alarm/background_channel')
+                  .invokeMethod(
+                      'isNativeNotificationActive', {'alarmId': alarmId});
+
+          if (isNativeActive) {
+            debugPrint(
+                'Native notification active, skipping fallback notification');
+
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('flutter.using_native_notification', true);
+            await prefs.setString('flutter.notification_handler', 'native');
+
+            return;
+          }
+        } catch (e) {
+          debugPrint('Error checking native notification: $e');
+        }
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final usingNativeNotification =
+          prefs.getBool('flutter.using_native_notification') ?? false;
+      final notificationHandler =
+          prefs.getString('flutter.notification_handler') ?? '';
+
+      if (usingNativeNotification || notificationHandler == 'native') {
+        debugPrint(
+            'Using native notification according to preferences, skipping fallback notification');
+        return;
+      }
+
+      String title = 'Alarm';
+      String body = 'Time to wake up! Tap to stop the alarm.';
+      bool nfcRequired = false;
+
+      try {
+        if (Get.isRegistered<AlarmController>()) {
+          final alarmController = Get.find<AlarmController>();
+          final alarm = alarmController.getAlarmById(alarmId);
+          if (alarm != null) {
+            nfcRequired = alarm.nfcRequired;
+            body = nfcRequired
+                ? 'Time to wake up! Scan your NFC tag to stop the alarm.'
+                : 'Time to wake up! Tap to stop the alarm.';
+          }
+        }
+      } catch (e) {
+        debugPrint('Error getting alarm details: $e');
+      }
+
+      await flutterLocalNotificationsPlugin.cancelAll();
+
+      final notificationId = 30000 + alarmId;
+
+      AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'alarm_channel',
+        'Alarm Notifications',
+        channelDescription: 'Channel for alarm notifications',
+        importance: Importance.max,
+        priority: Priority.max,
+        ongoing: true,
+        autoCancel: false,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        showWhen: true,
+        playSound: false, // We handle sound separately
+        sound: null,
+        actions: [
+          const AndroidNotificationAction(
+            'stop_alarm_action',
+            'Stop Alarm',
+            showsUserInterface: true,
+            cancelNotification: false,
+          ),
+        ],
+        color: Colors.red,
+        colorized: true,
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
+        enableLights: true,
+        ledColor: Colors.red,
+        ledOnMs: 1000,
+        ledOffMs: 500,
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: false,
+        sound: null,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      );
+
+      await flutterLocalNotificationsPlugin.show(
+        notificationId,
+        title,
+        body,
+        NotificationDetails(
+          android: androidDetails,
+          iOS: iosDetails,
+        ),
+        payload: "$alarmId:$soundId",
+      );
+
+      await prefs.setBool('flutter.using_native_notification', false);
+      await prefs.setString('flutter.notification_handler', 'flutter');
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('cancelAllNotifications');
+        } catch (e) {
+          debugPrint('Error canceling native notifications: $e');
+        }
+      }
+
+      debugPrint(
+          'Fallback notification shown successfully with ID: $notificationId');
+    } catch (e) {
+      debugPrint('Error showing fallback notification: $e');
+    }
+  }
+
+  ///  mark an alarm as activated to prevent duplicates
+  static Future<bool> markAlarmAsActivated(int alarmId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final activeAlarmId = prefs.getInt('active_alarm_id');
+
+      if (activeAlarmId == alarmId) {
+        final startTime = prefs.getInt('alarm_start_time') ?? 0;
+        final alarmAge = DateTime.now().millisecondsSinceEpoch - startTime;
+
+        if (alarmAge < 10 * 1000) {
+          debugPrint(
+              'Skipping duplicate activation for alarm ID: $alarmId (activated ${alarmAge}ms ago)');
+          return false;
+        }
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Error checking alarm activation status: $e');
+      return true;
+    }
+  }
+
+  /// clean old activation yimestamps
+  static Future<void> cleanupOldActivationTimestamps() async {
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final prefs = await SharedPreferences.getInstance();
+
+      _alarmActivationTimestamps.removeWhere(
+          (id, timestamp) => now - timestamp > 24 * 60 * 60 * 1000);
+
+      final keys = prefs
+          .getKeys()
+          .where((key) => key.startsWith('alarm_last_activated_'));
+      for (final key in keys) {
+        final timestamp = prefs.getInt(key) ?? 0;
+        if (now - timestamp > 24 * 60 * 60 * 1000) {
+          await prefs.remove(key);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cleaning up activation timestamps: $e');
+    }
+  }
+
+  /// Initializes the notification service with improved reliability
   static Future<void> initialize() async {
-    tz.initializeTimeZones();
-    const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('mipmap/ic_launcher');
-    const DarwinInitializationSettings initializationSettingsIOS =
-    DarwinInitializationSettings(
-      requestSoundPermission: true,
-      requestBadgePermission: true,
-      requestAlertPermission: true,
-    );
-    const InitializationSettings initializationSettings =
-    InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
-    await flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: onNotificationTap,
-      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-    );
-    // Clean up channels safely
-    await _cleanupAllNotificationChannels();
-    await requestPermissions();
-    await setupNotificationTriggerListener();
+    try {
+      tz.initializeTimeZones();
+      await ensureNotificationVisibility();
+
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('mipmap/ic_launcher');
+
+      const DarwinInitializationSettings initializationSettingsIOS =
+          DarwinInitializationSettings(
+        requestSoundPermission: true,
+        requestBadgePermission: true,
+        requestAlertPermission: true,
+        requestCriticalPermission: true,
+      );
+
+      const InitializationSettings initializationSettings =
+          InitializationSettings(
+        android: initializationSettingsAndroid,
+        iOS: initializationSettingsIOS,
+      );
+
+      await flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: onNotificationTap,
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
+
+      await _cleanupOldNotificationChannels();
+      await _ensureRequiredChannelsExist();
+      await requestPermissions();
+      await requestBatteryOptimizationExemption();
+      await setupNotificationTriggerListener();
+      await _clearAllActiveAlarms();
+      await checkAndRestoreAlarmsAfterReboot();
+      await cleanupOldActivationTimestamps();
+      Timer.periodic(const Duration(hours: 1), (_) {
+        clearStaleNotifications();
+      });
+
+      Timer.periodic(const Duration(hours: 12), (_) {
+        cleanupOldActivationTimestamps();
+      });
+    } catch (e) {
+      debugPrint('Notification service initialization error: $e');
+      _scheduleRetryInitialization();
+    }
   }
 
-  /// Setup a listener to start the background service when notifications are triggered
+  /// Schedule a retry for initialization if it fails
+  static void _scheduleRetryInitialization() {
+    Timer(const Duration(seconds: 30), () {
+      try {
+        initialize();
+      } catch (e) {
+        debugPrint('Retry initialization failed: $e');
+      }
+    });
+  }
+
+  /// Handles gradual volume increase for alarms
+  static Future<void> setupGradualVolumeIncrease(
+      int alarmId, int soundId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final initialVolume = prefs.getInt('alarm_volume') ?? 50;
+      int currentVolume = initialVolume;
+      final hour = DateTime.now().hour;
+      if (hour >= 22 || hour < 7) {
+        currentVolume = (initialVolume * 0.5).round();
+      }
+
+      if (_fallbackPlayers.containsKey(alarmId)) {
+        await _fallbackPlayers[alarmId]!.setVolume(currentVolume / 100);
+      }
+
+      Timer.periodic(const Duration(seconds: 30), (timer) async {
+        if (!_activeNotificationIds.contains(alarmId)) {
+          timer.cancel();
+          return;
+        }
+
+        currentVolume = min(currentVolume + 10, 100);
+        debugPrint('Increasing alarm volume to $currentVolume%');
+
+        if (_fallbackPlayers.containsKey(alarmId)) {
+          await _fallbackPlayers[alarmId]!.setVolume(currentVolume / 100);
+        }
+
+        final service = FlutterBackgroundService();
+        if (await service.isRunning()) {
+          service.invoke('updateVolume', {'volume': currentVolume});
+        }
+      });
+    } catch (e) {
+      debugPrint('Error setting up gradual volume increase: $e');
+    }
+  }
+
+  /// Shows a notification for upcoming alarms
+  static Future<void> showUpcomingAlarmNotification(AlarmModel alarm) async {
+    if (!alarm.isEnabled || alarm.id == null) return;
+
+    try {
+      final timeUntilAlarm =
+          alarm.getNextAlarmTime().difference(DateTime.now());
+
+      if (timeUntilAlarm.inMinutes > 60 || timeUntilAlarm.inMinutes < 1) return;
+
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'upcoming_alarm_channel',
+        'Upcoming Alarm Notifications',
+        channelDescription: 'Notifications for upcoming alarms',
+        importance: Importance.low,
+        priority: Priority.low,
+        showWhen: true,
+        autoCancel: true,
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: false,
+        presentSound: false,
+        interruptionLevel: InterruptionLevel.passive,
+      );
+
+      final formattedTime = alarm.getFormattedTime();
+      final timeRemaining = alarm.getTimeRemaining();
+
+      await flutterLocalNotificationsPlugin.show(
+        1000 + alarm.id!,
+        'Upcoming Alarm',
+        'Alarm set for $formattedTime (in $timeRemaining)',
+        const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      );
+    } catch (e) {
+      debugPrint('Error showing upcoming alarm notification: $e');
+    }
+  }
+
+  /// Handles device idle mode for Android
+  static Future<void> handleDeviceIdleMode() async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      await const MethodChannel('com.your.package/device_idle')
+          .invokeMethod('disableDeviceIdleMode');
+    } catch (e) {
+      debugPrint('Error handling device idle mode: $e');
+    }
+  }
+
+  /// Sets up a listener to start the background service when notifications are triggered
   static Future<void> setupNotificationTriggerListener() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-    flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
 
-    if (androidPlugin != null) {
-      final bool? granted = await androidPlugin.areNotificationsEnabled();
-      if (granted != true) {
-        await androidPlugin.requestNotificationsPermission();
+      if (androidPlugin != null) {
+        final bool? granted = await androidPlugin.areNotificationsEnabled();
+        if (granted != true) {
+          await androidPlugin.requestNotificationsPermission();
+        }
       }
-    }
 
-    final NotificationAppLaunchDetails? launchDetails =
-    await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+      final NotificationAppLaunchDetails? launchDetails =
+          await flutterLocalNotificationsPlugin
+              .getNotificationAppLaunchDetails();
 
-    if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
-      final String? payload = launchDetails.notificationResponse?.payload;
-      if (payload != null) {
-        final List<String> payloadParts = payload.split(':');
-        final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
-        final int soundId =
-        payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
-        _startAlarmSoundService(alarmId, soundId);
+      if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+        final String? payload = launchDetails.notificationResponse?.payload;
+        if (payload != null) {
+          final List<String> payloadParts = payload.split(':');
+          if (payloadParts.length >= 1) {
+            final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
+            final int soundId = payloadParts.length > 1
+                ? int.tryParse(payloadParts[1]) ?? 1
+                : 1;
+
+            await AlarmBackgroundService.forceStopService();
+            await Future.delayed(const Duration(milliseconds: 500));
+            _startAlarmSoundService(alarmId, soundId);
+          }
+        }
       }
+    } catch (e) {
+      debugPrint('Error setting up notification trigger listener: $e');
     }
   }
 
-  /// Clean up notification channels to prevent duplicates, but preserve active ones
-  static Future<void> _cleanupAllNotificationChannels() async {
+  /// Ensures all required notification channels exist with improved settings
+  static Future<void> _ensureRequiredChannelsExist() async {
+    try {
+      AndroidNotificationChannel foregroundChannel = AndroidNotificationChannel(
+        'alarm_foreground_service',
+        'Alarm Service Channel',
+        description: 'Used for alarm foreground service',
+        importance: Importance.max,
+        playSound: false,
+        showBadge: true,
+        enableLights: true,
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
+        ledColor: const Color.fromARGB(255, 255, 0, 0),
+      );
+
+      AndroidNotificationChannel fallbackChannel = AndroidNotificationChannel(
+        'alarm_fallback_channel',
+        'Alarm Fallback Channel',
+        description: 'Used when background service fails',
+        importance: Importance.max,
+        playSound: false,
+        enableVibration: true,
+        enableLights: true,
+        vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
+        ledColor: const Color.fromARGB(255, 255, 0, 0),
+      );
+
+      final plugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      if (plugin != null) {
+        await plugin.createNotificationChannel(foregroundChannel);
+        await plugin.createNotificationChannel(fallbackChannel);
+      }
+    } catch (e) {
+      debugPrint('Error creating notification channels: $e');
+    }
+  }
+
+  /// Cleans up old notification channels safely while preserving important ones
+  static Future<void> _cleanupOldNotificationChannels() async {
     try {
       final channels = await flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+              AndroidFlutterLocalNotificationsPlugin>()
           ?.getNotificationChannels();
 
       if (channels == null || channels.isEmpty) return;
 
-      for (final channel in channels) {
-        // Skip reserved channels to avoid the security exception
-        if (reservedChannels.contains(channel.id)) {
-          debugPrint('Skipping deletion of reserved channel: ${channel.id}');
-          continue;
-        }
+      final alarmChannels = channels
+          .where((channel) =>
+              channel.id.startsWith('alarm_channel_sound_') &&
+              !reservedChannels.contains(channel.id))
+          .toList();
 
-        try {
-          await flutterLocalNotificationsPlugin
-              .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-              ?.deleteNotificationChannel(channel.id);
-        } catch (e) {
-          // Log the error but continue with other channels
-          debugPrint('Could not delete channel ${channel.id}: $e');
+      if (alarmChannels.length > 10) {
+        alarmChannels.sort((a, b) {
+          final timestampA = int.tryParse(a.id.split('_').last) ?? 0;
+          final timestampB = int.tryParse(b.id.split('_').last) ?? 0;
+          return timestampB.compareTo(timestampA);
+        });
+
+        for (int i = 10; i < alarmChannels.length; i++) {
+          try {
+            await flutterLocalNotificationsPlugin
+                .resolvePlatformSpecificImplementation<
+                    AndroidFlutterLocalNotificationsPlugin>()
+                ?.deleteNotificationChannel(alarmChannels[i].id);
+          } catch (e) {
+            debugPrint('Could not delete channel ${alarmChannels[i].id}: $e');
+          }
         }
       }
     } catch (e) {
-      debugPrint('Error in cleaning up notification channels: $e');
+      debugPrint('Error cleaning up notification channels: $e');
     }
   }
 
-  /// Create a notification channel for a specific sound
+  /// Creates a notification channel for a specific sound with improved settings
   static Future<String> _createNotificationChannelForSound(int soundId) async {
-    final String androidSoundName =
-    SoundManager.getNotificationSoundName(soundId);
+    try {
+      final String androidSoundName =
+          SoundManager.getNotificationSoundName(soundId);
+      final String channelId = 'alarm_channel_sound_$soundId';
+      final String channelName =
+          'Alarm Sound: ${SoundManager.getSoundName(soundId)}';
 
-    final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    final String channelId = 'alarm_channel_sound_${soundId}_$timestamp';
-    final String channelName =
-        'Alarm Sound: ${SoundManager.getSoundName(soundId)}';
+      final plugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
 
-    final AndroidNotificationChannel alarmChannel = AndroidNotificationChannel(
-      channelId,
-      channelName,
-      description:
-      'Alarm notifications with sound: ${SoundManager.getSoundName(soundId)}',
-      importance: Importance.max,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound(androidSoundName),
-      enableVibration: true,
-      enableLights: true,
-    );
+      final channels = await plugin?.getNotificationChannels();
+      final channelExists =
+          channels?.any((channel) => channel.id == channelId) ?? false;
 
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(alarmChannel);
+      if (!channelExists && plugin != null) {
+        final AndroidNotificationChannel alarmChannel =
+            AndroidNotificationChannel(
+          channelId,
+          channelName,
+          description:
+              'Alarm notifications with sound: ${SoundManager.getSoundName(soundId)}',
+          importance: Importance.max,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound(androidSoundName),
+          enableVibration: true,
+          enableLights: true,
+          vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
+          ledColor: const Color.fromARGB(255, 255, 0, 0),
+        );
 
-    return channelId;
+        await plugin.createNotificationChannel(alarmChannel);
+      }
+
+      return channelId;
+    } catch (e) {
+      debugPrint('Error creating notification channel: $e');
+      return 'alarm_fallback_channel';
+    }
   }
 
-  /// Handle notification tap events
-  static void onNotificationTap(NotificationResponse notificationResponse) {
-    final String? payload = notificationResponse.payload;
-    final String? actionId = notificationResponse.actionId;
+  /// Clears notifications that should have triggered but failed to do so
+  static Future<void> clearStaleNotifications() async {
+    try {
+      final pendingNotificationRequests =
+          await flutterLocalNotificationsPlugin.pendingNotificationRequests();
 
-    if (payload == null) return;
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
 
-    final List<String> payloadParts = payload.split(':');
-    final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
+      for (final request in pendingNotificationRequests) {
+        final startTime = prefs.getInt('alarm_start_time') ?? 0;
 
-    final int soundId =
-    payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
+        if (startTime > 0) {
+          final scheduledTime = DateTime.fromMillisecondsSinceEpoch(startTime);
 
-    _startAlarmSoundService(alarmId, soundId);
+          if (now.difference(scheduledTime).inMinutes > 20) {
+            await cancelNotification(request.id);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error clearing stale notifications: $e');
+    }
+  }
 
-    if (actionId == stopActionId || payload.isNotEmpty) {
-      final alarmController = Get.find<AlarmController>();
-      final alarm = alarmController.getAlarmById(alarmId);
+  /// Clears any stuck notifications and active alarms at app start
+  static Future<void> _clearAllActiveAlarms() async {
+    try {
+      await AlarmBackgroundService.forceStopService();
 
-      if (alarm != null && alarm.nfcRequired) {
-        Get.toNamed(
-          AppConstants.nfcScan,
-          arguments: {'alarmId': alarmId},
-        );
-      } else {
-        Get.toNamed(
-          AppConstants.stopAlarm,
-          arguments: {'alarmId': alarmId},
-        );
+      final pendingNotifications =
+          await flutterLocalNotificationsPlugin.pendingNotificationRequests();
+      for (final notification in pendingNotifications) {
+        await flutterLocalNotificationsPlugin.cancel(notification.id);
+      }
+
+      await flutterLocalNotificationsPlugin.cancelAll();
+      _activeNotificationIds.clear();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('active_alarm_id');
+      await prefs.remove('active_alarm_sound');
+      await prefs.remove('alarm_start_time');
+      await prefs.remove('using_fallback_alarm');
+    } catch (e) {
+      debugPrint('Error clearing active alarms: $e');
+    }
+  }
+
+  /// Ensures notifications are visible even on locked screens with improved permission handling
+  static Future<void> ensureNotificationVisibility() async {
+    if (Platform.isAndroid) {
+      try {
+        final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+            flutterLocalNotificationsPlugin
+                .resolvePlatformSpecificImplementation<
+                    AndroidFlutterLocalNotificationsPlugin>();
+
+        if (androidPlugin != null) {
+          if (await _sdkVersionAtLeast(33)) {
+            final granted = await androidPlugin.requestExactAlarmsPermission();
+            debugPrint('Exact alarms permission granted: $granted');
+
+            if (!granted!) {
+              _schedulePermissionRetry();
+            }
+          }
+
+          if (await _sdkVersionAtLeast(30)) {
+            final granted = await androidPlugin.canScheduleExactNotifications();
+            debugPrint('Can schedule exact notifications: $granted');
+
+            if (!granted!) {
+              // Try to request via permission handler
+              await Permission.scheduleExactAlarm.request();
+            }
+          }
+        }
+
+        final notificationStatus = await Permission.notification.status;
+        if (!notificationStatus.isGranted) {
+          await Permission.notification.request();
+        }
+      } catch (e) {
+        debugPrint('Error ensuring notification visibility: $e');
       }
     }
   }
 
-  /// Handle background notification tap events
-  @pragma('vm:entry-point')
-  static void notificationTapBackground(
-      NotificationResponse notificationResponse) {
-    final String? payload = notificationResponse.payload;
+  /// Schedule a retry for permission requests
+  static void _schedulePermissionRetry() {
+    _permissionRetryTimer?.cancel();
+    _permissionRetryTimer = Timer(const Duration(minutes: 5), () async {
+      try {
+        await ensureNotificationVisibility();
+      } catch (e) {
+        debugPrint('Permission retry failed: $e');
+      }
+    });
+  }
 
-    if (payload != null) {
-      final List<String> payloadParts = payload.split(':');
-      final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
-      final int soundId =
-      payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
-
-      AlarmBackgroundService.startAlarm(alarmId, soundId);
+  /// Helper method to check Android SDK version
+  static Future<bool> _sdkVersionAtLeast(int version) async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final sdkInt = await const MethodChannel('android_sdk_version')
+              .invokeMethod<int>('getAndroidVersion') ??
+          0;
+      return sdkInt >= version;
+    } catch (e) {
+      debugPrint('Error getting Android SDK version: $e');
+      return true; // Assume newer version to be safe
     }
   }
 
-  /// Schedule an alarm notification
+  /// Handles notification tap events and routes to appropriate actions
+  static void onNotificationTap(NotificationResponse notificationResponse) {
+    try {
+      final String? payload = notificationResponse.payload;
+      final String? actionId = notificationResponse.actionId;
+
+      if (payload == null) return;
+
+      final List<String> payloadParts = payload.split(':');
+      if (payloadParts.isEmpty) return;
+
+      final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
+      final int soundId =
+          payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
+
+      debugPrint(
+          'Notification tapped with payload: $payload, action: $actionId');
+
+      if (actionId == stopActionId) {
+        _handleAlarmStop(alarmId, soundId);
+        return;
+      }
+
+      _startOrNavigateToAlarm(alarmId, soundId);
+    } catch (e) {
+      debugPrint('Error handling notification tap: $e');
+    }
+  }
+
+  /// Handles stopping an active alarm and cleaning up resources
+  static Future<void> _handleAlarmStop(int alarmId, int soundId) async {
+    try {
+      debugPrint('Handling alarm stop request for ID: $alarmId');
+
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.your.package/background_channel')
+              .invokeMethod('bringToForeground');
+        } catch (e) {
+          debugPrint('Error bringing app to foreground: $e');
+        }
+      }
+
+      Future.delayed(const Duration(milliseconds: 300), () {
+        try {
+          final alarmController = Get.isRegistered<AlarmController>()
+              ? Get.find<AlarmController>()
+              : Get.put(AlarmController());
+
+          final alarm = alarmController.getAlarmById(alarmId);
+          if (alarm != null && alarm.nfcRequired) {
+            Get.toNamed(
+              AppConstants.nfcScan,
+              arguments: {'alarmId': alarmId},
+            );
+          } else {
+            Get.toNamed(
+              AppConstants.stopAlarm,
+              arguments: {'alarmId': alarmId},
+            );
+          }
+        } catch (e) {
+          debugPrint('Error navigating to alarm screen: $e');
+        }
+      });
+    } catch (e) {
+      debugPrint('Error handling alarm stop: $e');
+    }
+  }
+
+  /// Starts the alarm service or navigates to the appropriate screen with improved reliability
+  static Future<void> _startOrNavigateToAlarm(int alarmId, int soundId) async {
+    try {
+      final isRunning = await AlarmBackgroundService.isAlarmActive();
+      if (!isRunning) {
+        await AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
+      }
+
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.your.package/background_channel')
+              .invokeMethod('bringToForeground');
+        } catch (e) {
+          debugPrint('Error bringing app to foreground: $e');
+        }
+      }
+
+      Future.delayed(const Duration(milliseconds: 300), () {
+        try {
+          final alarmController = Get.isRegistered<AlarmController>()
+              ? Get.find<AlarmController>()
+              : Get.put(AlarmController());
+
+          final alarm = alarmController.getAlarmById(alarmId);
+
+          if (alarm != null && alarm.nfcRequired) {
+            Get.toNamed(
+              AppConstants.nfcScan,
+              arguments: {'alarmId': alarmId},
+            );
+          } else {
+            Get.toNamed(
+              AppConstants.stopAlarm,
+              arguments: {'alarmId': alarmId},
+            );
+          }
+        } catch (e) {
+          debugPrint('Error navigating to alarm screen: $e');
+        }
+      });
+    } catch (e) {
+      debugPrint('Error starting/navigating to alarm: $e');
+      // Try fallback approach
+      try {
+        await _startAlarmSoundService(alarmId, soundId);
+      } catch (_) {}
+    }
+  }
+
+  /// Handles background notification tap events with improved reliability
+  @pragma('vm:entry-point')
+  @pragma('vm:entry-point')
+  static void notificationTapBackground(
+      NotificationResponse notificationResponse) {
+    try {
+      final String? payload = notificationResponse.payload;
+      final String? actionId = notificationResponse.actionId;
+
+      if (payload != null) {
+        final List<String> payloadParts = payload.split(':');
+        if (payloadParts.isNotEmpty) {
+          final int alarmId = int.tryParse(payloadParts[0]) ?? 0;
+          final int soundId =
+              payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
+
+          if (actionId == stopActionId) {
+            AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
+          } else {
+            AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error in notification tap background: $e');
+    }
+  }
+
+
+
+  /// Schedules an alarm notification for a future time
   static Future<void> scheduleAlarmNotification({
     required int id,
     required DateTime scheduledTime,
@@ -516,62 +804,124 @@ class NotificationService {
     String? subtitle,
   }) async {
     try {
+      _activeNotificationIds.add(id);
+
       final String channelId =
-      await _createNotificationChannelForSound(soundId);
+          await _createNotificationChannelForSound(soundId);
       final String androidSoundName =
-      SoundManager.getNotificationSoundName(soundId);
+          SoundManager.getNotificationSoundName(soundId);
       final String iosSoundName = SoundManager.getIOSNotificationSound(soundId);
 
-      final List<AndroidNotificationAction> actions = [
-        const AndroidNotificationAction(
-          stopActionId,
-          'Stop Alarm',
-          showsUserInterface: true,
-        ),
-      ];
+      final prefs = await SharedPreferences.getInstance();
 
-      final bodyText = nfcRequired
-          ? 'Time to wake up! Scan your NFC tag to stop the alarm.'
-          : 'Time to wake up! Tap to stop the alarm.';
+      List<String> scheduledAlarms = [];
+      try {
+        scheduledAlarms = prefs.getStringList('scheduled_alarms') ?? [];
+      } catch (e) {
+        try {
+          final String? alarmString = prefs.getString('scheduled_alarms');
+          if (alarmString != null) {
+            if (alarmString.startsWith('[') && alarmString.endsWith(']')) {
+              try {
+                final List<dynamic> jsonList = json.decode(alarmString);
+                scheduledAlarms =
+                    jsonList.map((item) => item.toString()).toList();
+              } catch (_) {
+                scheduledAlarms =
+                    alarmString.split(',').where((s) => s.isNotEmpty).toList();
+              }
+            } else {
+              scheduledAlarms =
+                  alarmString.split(',').where((s) => s.isNotEmpty).toList();
+            }
+          }
+        } catch (_) {
+          scheduledAlarms = [];
+        }
+      }
 
-      final Duration timeUntilAlarm = scheduledTime.difference(DateTime.now());
-      if (timeUntilAlarm.inSeconds > 0) {
-        Timer(timeUntilAlarm, () {
-          AlarmBackgroundService.startAlarm(id, soundId);
-        });
+      final filteredAlarms = scheduledAlarms.where((alarm) {
+        final parts = alarm.split(':');
+        return parts.isNotEmpty && parts[0] != id.toString();
+      }).toList();
+
+      filteredAlarms.add(
+          '$id:$soundId:${scheduledTime.millisecondsSinceEpoch}:$nfcRequired');
+
+      await prefs.setStringList('scheduled_alarms', filteredAlarms);
+
+      if (Platform.isAndroid) {
+        try {
+          await AlarmBackgroundService.scheduleExactAlarm(
+              id, scheduledTime, soundId, nfcRequired);
+
+          debugPrint('Scheduled exact alarm with AlarmManager');
+        } catch (e) {
+          debugPrint('Error scheduling with AlarmManager: $e');
+          await AndroidAlarmManager.oneShotAt(
+            scheduledTime,
+            id,
+            AlarmBackgroundService.handleAlarmCallback,
+            exact: true,
+            wakeup: true,
+            rescheduleOnReboot: true,
+            alarmClock: true,
+            allowWhileIdle: true,
+            params: {
+              'alarmId': id,
+              'soundId': soundId,
+              'nfcRequired': nfcRequired,
+            },
+          );
+        }
       }
 
       await flutterLocalNotificationsPlugin.zonedSchedule(
         id,
         title ?? 'Alarm',
-        body ?? bodyText,
+        body ??
+            (nfcRequired ? 'Scan NFC Tag to Stop Alarm' : 'Tap to Stop Alarm'),
         tz.TZDateTime.from(scheduledTime, tz.local),
         NotificationDetails(
           android: AndroidNotificationDetails(
             channelId,
             'Alarm Sound: ${SoundManager.getSoundName(soundId)}',
             channelDescription:
-            'Alarm notifications with sound: ${SoundManager.getSoundName(soundId)}',
+                'Alarm notifications with sound: ${SoundManager.getSoundName(soundId)}',
             importance: Importance.max,
-            priority: Priority.high,
+            priority: Priority.max,
             autoCancel: false,
             ongoing: true,
-            playSound: false,
-            sound: RawResourceAndroidNotificationSound(androidSoundName),
+            playSound: true,
             category: AndroidNotificationCategory.alarm,
+            visibility: NotificationVisibility.public,
+            showWhen: true,
+            usesChronometer: true,
+            enableLights: true,
+            ledColor: Colors.red,
+            ledOnMs: 1000,
+            ledOffMs: 500,
+            sound: RawResourceAndroidNotificationSound(androidSoundName),
             fullScreenIntent: true,
+            vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
             styleInformation: BigTextStyleInformation(
-              bodyText,
+              nfcRequired ? 'Scan NFC Tag to Stop Alarm' : 'Tap to Stop Alarm',
               htmlFormatBigText: true,
               contentTitle: 'Alarm',
               htmlFormatContentTitle: true,
               summaryText: 'Alarm notification',
               htmlFormatSummaryText: true,
             ),
-            actions: actions,
+            actions: [
+              const AndroidNotificationAction(
+                stopActionId,
+                'Stop Alarm',
+                showsUserInterface: true,
+                cancelNotification: false,
+              ),
+            ],
             color: Colors.red,
             colorized: true,
-            visibility: NotificationVisibility.public,
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
@@ -580,84 +930,442 @@ class NotificationService {
             interruptionLevel: InterruptionLevel.critical,
             threadIdentifier: 'alarm_thread',
             subtitle:
-            subtitle ?? (nfcRequired ? 'Scan NFC to stop' : 'Tap to stop'),
+                subtitle ?? (nfcRequired ? 'Scan NFC to stop' : 'Tap to stop'),
             categoryIdentifier: 'alarm_category',
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
-        UILocalNotificationDateInterpretation.absoluteTime,
+            UILocalNotificationDateInterpretation.absoluteTime,
         payload: "$id:$soundId",
       );
+
+      debugPrint('Alarm scheduled for ${scheduledTime.toString()} with ID $id');
     } catch (e) {
       debugPrint('Error scheduling notification: $e');
+      throw Exception('Failed to schedule alarm: $e');
     }
   }
 
-  /// Starts the background service to play alarm sound with the specified ID and sound.
+
+  /// Starts the background service to play alarm sound with improved reliability
   static Future<void> _startAlarmSoundService(int alarmId, int soundId) async {
     try {
-      await AlarmBackgroundService.startAlarm(alarmId, soundId);
+      if (!(await markAlarmAsActivated(alarmId))) {
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('active_alarm_id', alarmId);
+      await prefs.setInt('active_alarm_sound', soundId);
+      await prefs.setInt(
+          'alarm_start_time', DateTime.now().millisecondsSinceEpoch);
+      await prefs.setBool('using_fallback_alarm', false);
+
+      await acquirePersistentWakeLock();
+
+      final isRunning = await AlarmBackgroundService.isAlarmActive();
+      if (isRunning) {
+        await AlarmBackgroundService.stopAlarm();
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.your.package/background_channel')
+              .invokeMethod('startForegroundService', {
+            'alarmId': alarmId,
+            'soundId': soundId,
+          });
+
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          if (await AlarmBackgroundService.isAlarmActive()) {
+            return;
+          }
+        } catch (e) {
+          debugPrint('Native foreground service start failed: $e');
+        }
+      }
+
+      await AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
+
+      final serviceActive = await AlarmBackgroundService.isAlarmActive();
+      if (!serviceActive) {
+        throw Exception('Service failed to start');
+      }
     } catch (e) {
       debugPrint('Error starting alarm sound service: $e');
-      await flutterLocalNotificationsPlugin.show(
-        alarmId,
-        'Alarm',
-        'Time to wake up!',
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            'alarm_fallback_channel',
-            'Alarm Fallback Channel',
-            channelDescription: 'Used when background service fails',
-            importance: Importance.max,
-            priority: Priority.high,
-            enableVibration: true,
-            vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
-            fullScreenIntent: true,
-          ),
-          iOS: const DarwinNotificationDetails(
-            presentAlert: true,
-            presentSound: true,
-            interruptionLevel: InterruptionLevel.critical,
-          ),
-        ),
-      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('using_fallback_alarm', true);
+
+      await showFallbackAlarmNotification(alarmId, soundId);
     }
   }
 
-  /// Cancel a specific notification
-  static Future<void> cancelNotification(int id) async {
-    await flutterLocalNotificationsPlugin.cancel(id);
+  /// Acquires a wake lock to keep the device awake during alarm
+  static Future<void> acquirePersistentWakeLock() async {
+    if (Platform.isAndroid) {
+      try {
+        await const MethodChannel('com.your.package/wake_lock')
+            .invokeMethod('acquirePersistentWakeLock');
+      } catch (e) {
+        debugPrint('Error acquiring persistent wake lock via channel: $e');
+        try {
+          await WakelockPlus.enable();
+        } catch (e) {
+          debugPrint('Error acquiring wake lock: $e');
+        }
+      }
+    }
   }
 
-  /// Cancel all notifications
+  /// Releases wake lock after alarm is dismissed
+  static Future<void> releaseWakeLock() async {
+    if (Platform.isAndroid) {
+      try {
+        await const MethodChannel('com.your.package/wake_lock')
+            .invokeMethod('releaseWakeLock');
+      } catch (e) {
+        debugPrint('Error releasing wake lock via channel: $e');
+        try {
+          await WakelockPlus.disable();
+        } catch (e) {
+          debugPrint('Error releasing wake lock: $e');
+        }
+      }
+    }
+  }
+
+  /// Requests exemption from battery optimization with improved implementation
+  static Future<void> requestBatteryOptimizationExemption() async {
+    if (Platform.isAndroid) {
+      try {
+        final status = await Permission.ignoreBatteryOptimizations.status;
+        if (!status.isGranted) {
+          await Permission.ignoreBatteryOptimizations.request();
+
+          if (!(await Permission.ignoreBatteryOptimizations.isGranted)) {
+            try {
+              await const MethodChannel('com.your.package/battery_optimization')
+                  .invokeMethod('requestBatteryOptimizationExemption');
+            } catch (e) {
+              debugPrint(
+                  'Error requesting battery optimization exemption via channel: $e');
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error requesting battery optimization exemption: $e');
+      }
+    }
+  }
+
+  /// Checks for alarms that need to be restored after device reboot with improved reliability
+
+  static Future<void> checkAndRestoreAlarmsAfterReboot() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final activeAlarmId = prefs.getInt('active_alarm_id');
+      if (activeAlarmId != null) {
+        final soundId = prefs.getInt('active_alarm_sound') ?? 1;
+        final startTime = prefs.getInt('alarm_start_time') ?? 0;
+
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (startTime > 0 && now - startTime < 30 * 60 * 1000) {
+          _startAlarmSoundService(activeAlarmId, soundId);
+          return;
+        }
+      }
+
+      // Get scheduled alarms - ALWAYS as String first
+      final String? existingAlarmsJson = prefs.getString('scheduled_alarms');
+      List<String> scheduledAlarms = [];
+
+      if (existingAlarmsJson != null && existingAlarmsJson.isNotEmpty) {
+        try {
+          if (existingAlarmsJson.startsWith('[') && existingAlarmsJson.endsWith(']')) {
+            // It's JSON format
+            final List<dynamic> jsonList = json.decode(existingAlarmsJson);
+            scheduledAlarms = jsonList.map((item) => item.toString()).toList();
+          } else {
+            // It's legacy format
+            scheduledAlarms = existingAlarmsJson.split(',').where((s) => s.isNotEmpty).toList();
+          }
+        } catch (e) {
+          debugPrint('Error parsing scheduled alarms: $e');
+          scheduledAlarms = [];
+        }
+      }
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      for (final alarmInfo in scheduledAlarms) {
+        final parts = alarmInfo.split(':');
+        if (parts.length >= 3) {
+          final id = int.tryParse(parts[0]) ?? 0;
+          final soundId = int.tryParse(parts[1]) ?? 1;
+          final scheduledTime = int.tryParse(parts[2]) ?? 0;
+          final nfcRequired = parts.length > 3 ? parts[3] == 'true' : false;
+
+          if (scheduledTime < now && now - scheduledTime < 30 * 60 * 1000) {
+            _startAlarmSoundService(id, soundId);
+
+            if (Get.isRegistered<AlarmController>()) {
+              final alarmController = Get.find<AlarmController>();
+              alarmController.activeAlarmId.value = id;
+            }
+
+            break;
+          } else if (scheduledTime > now) {
+            final scheduledDateTime = DateTime.fromMillisecondsSinceEpoch(scheduledTime);
+            scheduleAlarmNotification(
+              id: id,
+              scheduledTime: scheduledDateTime,
+              soundId: soundId,
+              nfcRequired: nfcRequired,
+            );
+          }
+        }
+      }
+
+      final updatedScheduledAlarms = scheduledAlarms.where((alarmInfo) {
+        final parts = alarmInfo.split(':');
+        if (parts.length >= 3) {
+          final scheduledTime = int.tryParse(parts[2]) ?? 0;
+          return scheduledTime > now || (now - scheduledTime < 30 * 60 * 1000);
+        }
+        return false;
+      }).toList();
+
+      await prefs.setString('scheduled_alarms', json.encode(updatedScheduledAlarms));
+    } catch (e) {
+      debugPrint('Error checking for alarms after reboot: $e');
+    }
+  }
+
+
+  /// Cancels a specific notification and cleans up associated resources
+
+  static Future<void> cancelNotification(int id) async {
+    try {
+      _activeNotificationIds.remove(id);
+      await flutterLocalNotificationsPlugin.cancel(id);
+      await flutterLocalNotificationsPlugin.cancel(30000 + id);
+      await flutterLocalNotificationsPlugin.cancel(20000 + id);
+
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('cancelNotification', {'alarmId': id});
+
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('cancelExactAlarm', {'alarmId': id});
+
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('forceStopService');
+        } catch (e) {
+          debugPrint('Error canceling native notification/alarm: $e');
+        }
+      }
+
+      if (Platform.isAndroid) {
+        try {
+          await AndroidAlarmManager.cancel(id);
+        } catch (e) {
+          debugPrint('Error canceling AndroidAlarmManager alarm: $e');
+        }
+      }
+
+      final player = _fallbackPlayers[id];
+      if (player != null) {
+        await player.stop();
+        await player.dispose();
+        _fallbackPlayers.remove(id);
+      }
+
+      if (Get.isRegistered<AlarmController>()) {
+        final alarmController = Get.find<AlarmController>();
+        if (alarmController.activeAlarmId.value == id) {
+          await AlarmBackgroundService.stopAlarm();
+        }
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+
+      final String? existingAlarmsJson = prefs.getString('scheduled_alarms');
+      if (existingAlarmsJson != null && existingAlarmsJson.isNotEmpty) {
+        try {
+          List<String> alarms = [];
+
+          if (existingAlarmsJson.startsWith('[') && existingAlarmsJson.endsWith(']')) {
+
+            final List<dynamic> jsonList = json.decode(existingAlarmsJson);
+            alarms = jsonList.map((item) => item.toString()).toList();
+          } else {
+
+            alarms = existingAlarmsJson.split(',').where((s) => s.isNotEmpty).toList();
+          }
+
+          final updatedAlarms = alarms.where((alarm) {
+            final parts = alarm.split(':');
+            return parts.isNotEmpty && parts[0] != id.toString();
+          }).toList();
+
+          await prefs.setString('scheduled_alarms', json.encode(updatedAlarms));
+        } catch (e) {
+          debugPrint('Error updating scheduled alarms: $e');
+          await AlarmBackgroundService.removeScheduledAlarm(id);
+        }
+      }
+
+      if (prefs.getInt('active_alarm_id') == id || prefs.getInt('flutter.active_alarm_id') == id) {
+        await prefs.remove('active_alarm_id');
+        await prefs.remove('active_alarm_sound');
+        await prefs.remove('alarm_start_time');
+        await prefs.remove('using_fallback_alarm');
+        await prefs.remove('flutter.active_alarm_id');
+        await prefs.remove('flutter.active_alarm_sound');
+        await prefs.remove('flutter.alarm_start_time');
+        await prefs.remove('flutter.using_fallback_alarm');
+      }
+
+      debugPrint('Successfully canceled notification and alarm with ID: $id');
+    } catch (e) {
+      debugPrint('Error canceling notification: $e');
+    }
+  }
+
+
+
+  /// Cancels all notifications and cleans up resources
   static Future<void> cancelAllNotifications() async {
-    await flutterLocalNotificationsPlugin.cancelAll();
+    try {
+      _activeNotificationIds.clear();
+      await flutterLocalNotificationsPlugin.cancelAll();
+
+      for (final player in _fallbackPlayers.values) {
+        await player.stop();
+        await player.dispose();
+      }
+      _fallbackPlayers.clear();
+
+      await AlarmBackgroundService.stopAlarm();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('active_alarm_id');
+      await prefs.remove('active_alarm_sound');
+      await prefs.remove('alarm_start_time');
+      await prefs.remove('using_fallback_alarm');
+      await prefs.setStringList('scheduled_alarms', []);
+    } catch (e) {
+      debugPrint('Error canceling all notifications: $e');
+    }
   }
 
   /// Check if notifications are permitted
   static Future<bool> areNotificationsEnabled() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-    flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    final bool? permitted = await androidPlugin?.areNotificationsEnabled();
-    return permitted ?? false;
+    try {
+      final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      if (androidPlugin != null) {
+        final bool? permitted = await androidPlugin.areNotificationsEnabled();
+        return permitted ?? false;
+      }
+
+      if (Platform.isIOS) {
+        final status = await Permission.notification.status;
+        return status.isGranted;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error checking notification permissions: $e');
+      return false;
+    }
   }
 
-  /// Request notification permissions
-  static Future<void> requestPermissions() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-    flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.requestNotificationsPermission();
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-      alert: true,
-      badge: true,
-      sound: true,
-      critical: true,
-    );
+  /// Request notification permissions with improved implementation
+  static Future<bool> requestPermissions() async {
+    try {
+      final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      bool androidResult = false;
+      if (androidPlugin != null) {
+        androidResult =
+            await androidPlugin.requestNotificationsPermission() ?? false;
+
+        if (await _sdkVersionAtLeast(31)) {
+          await androidPlugin.requestExactAlarmsPermission();
+        }
+
+        await Permission.notification.request();
+        await Permission.scheduleExactAlarm.request();
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+
+      final iOSPlugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+
+      final iosResult = await iOSPlugin?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+            critical: true,
+          ) ??
+          false;
+
+      final hasPermissions =
+          androidResult || iosResult || await Permission.notification.isGranted;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notification_permissions', hasPermissions);
+
+      return hasPermissions;
+    } catch (e) {
+      debugPrint('Error requesting notification permissions: $e');
+      return false;
+    }
+  }
+
+  /// Check notification permissions and show dialog if needed
+  static Future<bool> checkNotificationPermissions(BuildContext context) async {
+    final hasPermissions = await areNotificationsEnabled();
+
+    if (!hasPermissions) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Notification Permission Required'),
+          content: const Text(
+              'Alarms require notification permissions to work properly. Please enable notifications in your device settings.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Later'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await requestPermissions();
+                if (Platform.isAndroid || Platform.isIOS) {
+                  await openAppSettings();
+                }
+              },
+              child: const Text('Open Settings'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return hasPermissions;
   }
 }

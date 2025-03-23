@@ -65,6 +65,68 @@ class AlarmModel {
     );
   }
 
+  // Add these methods to AlarmModel
+
+  /// Checks if the alarm is currently ringing or should be ringing
+  bool isRinging(DateTime now) {
+    if (!isEnabled) return false;
+
+    // If we have a last set time but no stop time, the alarm is ringing
+    if (lastSetTime != null && lastStopTime == null) {
+      return true;
+    }
+
+    // Check if the alarm time is within the last minute (to catch alarms that just triggered)
+    final alarmTimeToday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+
+    return now.difference(alarmTimeToday).inMinutes.abs() < 1;
+  }
+
+  /// Determines if this alarm will trigger today
+  bool willTriggerToday() {
+    final now = DateTime.now();
+
+    if (!isEnabled) return false;
+
+    if (isRepeating) {
+      String currentDay = now.weekday.toString();
+      if (!daysActive.contains(currentDay)) return false;
+    }
+
+    final alarmTimeToday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+
+    return alarmTimeToday.isAfter(now);
+  }
+
+  /// Gets time remaining until alarm triggers
+  String getTimeRemaining() {
+    final now = DateTime.now();
+    final nextTrigger = getNextAlarmTime();
+    final difference = nextTrigger.difference(now);
+
+    final hours = difference.inHours;
+    final minutes = difference.inMinutes % 60;
+
+    if (hours > 0) {
+      return '$hours hr ${minutes > 0 ? '$minutes min' : ''}';
+    } else {
+      return '$minutes min';
+    }
+  }
+
+
   /// Determines if the alarm should be active based on current time and settings
   bool shouldBeActive() {
     if (!isEnabled) return false;

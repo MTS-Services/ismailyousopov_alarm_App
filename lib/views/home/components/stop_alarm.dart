@@ -3,13 +3,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
 import '../../../controllers/nfc/nfc_controller.dart';
+import '../../../core/services/background_service.dart';
 
 class AlarmStopWidget extends StatefulWidget {
   final int alarmId;
+  final int soundId;
 
   const AlarmStopWidget({
     super.key,
     required this.alarmId,
+    this.soundId = 1,
   });
 
   @override
@@ -35,6 +38,8 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
       vsync: this,
     )..repeat();
 
+    _ensureAlarmIsActive();
+
     _startNfcVerification();
   }
 
@@ -46,6 +51,21 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
     super.dispose();
   }
 
+
+  Future<void> _ensureAlarmIsActive() async {
+    try {
+      final isActive = await AlarmBackgroundService.isAlarmActive();
+      if (!isActive) {
+        await AlarmBackgroundService.forceStartAlarmIfNeeded(
+            widget.alarmId,
+            widget.soundId
+        );
+      }
+    } catch (e) {
+      debugPrint('Error ensuring alarm is active: $e');
+    }
+  }
+
   /// start nfc verification
   Future<void> _startNfcVerification() async {
     isVerifying.value = true;
@@ -55,20 +75,20 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
       isVerifying.value = false;
       showErrorMessage.value = true;
       errorMessage.value =
-          'NFC is not available on this device. Please use backup code.';
+      'NFC is not available on this device. Please use backup code.';
       return;
     }
 
     final success = await _nfcController.startAlarmVerification(widget.alarmId);
 
     if (success) {
-      _alarmController.stopAlarm(widget.alarmId);
+      await _alarmController.stopAlarm(widget.alarmId, soundId: widget.soundId);
       Get.back();
     } else {
       isVerifying.value = false;
       showErrorMessage.value = true;
       errorMessage.value =
-          'NFC verification failed. Please try again or use backup code.';
+      'NFC verification failed. Please try again or use backup code.';
     }
   }
 
@@ -77,8 +97,8 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
     final code = _backupCodeController.text.trim();
 
     if (_nfcController.verifyBackupCode(code)) {
-      _alarmController.stopAlarm(widget.alarmId);
-      Navigator.of(context).pop(); // Close dialog
+      _alarmController.stopAlarm(widget.alarmId, soundId: widget.soundId);
+      Navigator.of(context).pop();
       Get.back();
     } else {
       showErrorMessage.value = true;
@@ -406,3 +426,4 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
     );
   }
 }
+

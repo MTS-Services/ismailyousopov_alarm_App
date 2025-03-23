@@ -20,10 +20,9 @@ class DatabaseHelper {
   Future<Database> _initDatabase() async {
     String path = await getDatabasesPath();
     return await openDatabase(
-      join(path, 'alarm_database.db'),
-      version: 5,
+      join(path, 'alarm_database_earlyUp.db'),
+      version: 1,
       onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
     );
   }
 
@@ -57,30 +56,6 @@ class DatabaseHelper {
     ''');
   }
 
-  /// Handles database migrations when upgrading to newer versions
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute(
-          'ALTER TABLE sleep_history ADD COLUMN alarm_count INTEGER DEFAULT 1');
-    }
-
-    if (oldVersion < 3) {
-      await db.execute(
-          'ALTER TABLE alarms ADD COLUMN is_for_today INTEGER NOT NULL DEFAULT 0');
-    }
-
-    if (oldVersion < 4) {
-      await db.execute('ALTER TABLE alarms ADD COLUMN last_set_time TEXT');
-      await db.execute('ALTER TABLE alarms ADD COLUMN last_stop_time TEXT');
-    }
-
-    if (oldVersion < 5) {
-      await db.execute(
-          'ALTER TABLE alarms ADD COLUMN duration_minutes INTEGER DEFAULT 30');
-      await db.execute(
-          'ALTER TABLE sleep_history ADD COLUMN total_alarm_duration INTEGER DEFAULT 30');
-    }
-  }
 
   /// Inserts a new alarm into the database
   Future<int> insertAlarm(AlarmModel alarm) async {

@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:alarm/views/home/components/alarm_history.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
 import '../../../core/constants/asset_constants.dart';
 import '../../../core/database/database_helper.dart';
@@ -61,15 +66,45 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     }
   }
 
+
   /// Disables an alarm and cancels its notification
   Future<void> _cancelAlarm(AlarmModel alarm) async {
     if (alarm.id == null) return;
 
     try {
+
+      final prefs = await SharedPreferences.getInstance();
+      final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
+
+      if (activeAlarmId == alarm.id) {
+
+        await _alarmController.stopAlarm(alarm.id!);
+
+        try {
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('forceStopService');
+        } catch (e) {
+          debugPrint('Error stopping native service: $e');
+        }
+      }
+
       alarm.isEnabled = false;
       await _databaseHelper.updateAlarm(alarm);
+
       await NotificationService.cancelNotification(alarm.id!);
+
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('cancelExactAlarm', {'alarmId': alarm.id});
+          await AndroidAlarmManager.cancel(alarm.id!);
+        } catch (e) {
+          debugPrint('Error canceling exact alarm: $e');
+        }
+      }
+
       await _alarmController.loadAlarms();
+
       _showFeedbackMessage('Alarm canceled successfully');
       _loadAlarms();
     } catch (e) {
@@ -77,6 +112,9 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
       _showFeedbackMessage('Failed to cancel alarm', isError: true);
     }
   }
+
+
+
 
   /// Navigates to the alarm settings screen with the selected alarm for editing
   void _editAlarm(AlarmModel alarm) {
