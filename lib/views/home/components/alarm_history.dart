@@ -18,8 +18,8 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final AlarmController _alarmController = Get.put(AlarmController());
   final DatabaseHelper _databaseHelper = DatabaseHelper();
-  List<AlarmModel> _alarms = [];
-  bool _isLoading = true;
+  final RxList<AlarmModel> _alarms = <AlarmModel>[].obs;
+  final RxBool _isLoading = true.obs;
 
   @override
   void initState() {
@@ -28,7 +28,34 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
   }
 
   /// Creates a new active alarm based on settings from a previous alarm
-  Future<void> _reuseAlarm(AlarmModel alarm) async {
+  Future<void> _reuseAlarm(AlarmModel alarm, bool isEnabled) async {
+    if (!isEnabled) {
+      // Find and delete the active alarm with matching time and settings
+      try {
+        final activeAlarms = _alarmController.getActiveAlarms();
+        final matchingAlarm = activeAlarms.firstWhere(
+          (active) => 
+              active.time.hour == alarm.time.hour && 
+              active.time.minute == alarm.time.minute &&
+              active.soundId == alarm.soundId,
+          orElse: () => AlarmModel(time: DateTime.now(), id: -1),
+        );
+        
+        if (matchingAlarm.id != null && matchingAlarm.id != -1) {
+          await _databaseHelper.deleteAlarm(matchingAlarm.id!);
+          await _alarmController.loadAlarms();
+          _alarmController.refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+          _showFeedbackMessage('Alarm disabled');
+        }
+        
+        await _loadAlarms();
+      } catch (e) {
+        debugPrint('Error disabling alarm: $e');
+        _showFeedbackMessage('Failed to disable alarm', isError: true);
+      }
+      return;
+    }
+    
     try {
       final DateTime now = DateTime.now();
       DateTime newTime;
@@ -65,10 +92,6 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
         isForToday: true,
       );
 
-      if (alarm.id != null) {
-        await _databaseHelper.deleteAlarm(alarm.id!);
-      }
-
       await _alarmController.createAlarm(newAlarm);
       await Future.delayed(const Duration(milliseconds: 300));
 
@@ -77,7 +100,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
           DateTime.now().millisecondsSinceEpoch;
       await _loadAlarms();
 
-      Get.toNamed(AppConstants.home);
+      // Get.toNamed(AppConstants.home);
       _showFeedbackMessage('Alarm reused successfully');
     } catch (e) {
       debugPrint('Error reusing alarm: $e');
@@ -88,9 +111,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
 
   /// Loads all past or inactive alarms from the database
   Future<void> _loadAlarms() async {
-    setState(() {
-      _isLoading = true;
-    });
+    _isLoading.value = true;
 
     try {
       final allAlarms = await _databaseHelper.getAllAlarms();
@@ -101,15 +122,11 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
             (!alarm.isRepeating && alarm.time.isBefore(now));
       }).toList();
 
-      setState(() {
-        _alarms = historyAlarms;
-        _isLoading = false;
-      });
+      _alarms.value = historyAlarms;
+      _isLoading.value = false;
     } catch (e) {
       debugPrint('Error loading alarms: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      _isLoading.value = false;
       _showFeedbackMessage('Error loading alarms', isError: true);
     }
   }
@@ -223,32 +240,34 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
 
   /// Builds the main content based on loading state and alarm availability
   Widget _buildBodyContent() {
-    if (_isLoading) {
-      return Center(
-          child: CircularProgressIndicator(
-            color: Theme.of(context).primaryColor,
-          ));
-    }
+    return Obx(() {
+      if (_isLoading.value) {
+        return Center(
+            child: CircularProgressIndicator(
+              color: Theme.of(context).primaryColor,
+            ));
+      }
 
-    if (_alarms.isEmpty) {
-      return Center(
-        child: Text(
-          'No alarm history found',
-          style: GoogleFonts.interTight(
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
+      if (_alarms.isEmpty) {
+        return Center(
+          child: Text(
+            'No alarm history found',
+            style: GoogleFonts.interTight(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
           ),
+        );
+      }
+
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            for (var alarm in _alarms) _buildAlarmCard(alarm),
+          ].divide(const SizedBox(height: 16)),
         ),
       );
-    }
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          for (var alarm in _alarms) _buildAlarmCard(alarm),
-        ].divide(const SizedBox(height: 16)),
-      ),
-    );
+    });
   }
 
   /// Builds an individual alarm card with time display and action buttons
@@ -267,7 +286,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor,
+          color: Colors.black,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Padding(
@@ -275,9 +294,16 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Padding(
-                padding: EdgeInsets.only(left: 22 * scaleFactor),
-                child: _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
+              Row(
+                children: [
+                  Icon(
+                    Icons.notifications_active,
+                    color: Theme.of(context).primaryColor,
+                    size: 26 * scaleFactor,
+                  ),
+                  SizedBox(width: 10 * scaleFactor),
+                  _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
+                ],
               ),
               _buildActionButtons(alarm, scaleFactor: scaleFactor),
             ],
@@ -287,12 +313,20 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     );
   }
 
-  /// Builds action buttons (Delete and Use)
+  /// Builds action buttons (Delete and Toggle)
   Widget _buildActionButtons(AlarmModel alarm, {double scaleFactor = 1.0}) {
     final buttonHeight = 36.0 * scaleFactor;
     final buttonWidth = max(70.0 * scaleFactor, 60.0);
     final fontSize = 14.0 * scaleFactor;
     final horizontalPadding = 8.0 * scaleFactor;
+
+    // Check if the alarm exists in active alarms
+    bool isActive = _alarmController.getActiveAlarms().any(
+        (activeAlarm) => 
+            activeAlarm.time.hour == alarm.time.hour && 
+            activeAlarm.time.minute == alarm.time.minute &&
+            activeAlarm.soundId == alarm.soundId
+    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -300,7 +334,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
         ElevatedButton(
           onPressed: () => _deleteAlarm(alarm.id),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.black,
+            backgroundColor: Colors.white,
             padding: EdgeInsets.symmetric(
               horizontal: horizontalPadding,
               vertical: horizontalPadding / 2,
@@ -317,7 +351,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
               'Delete',
               style: TextStyle(
                 fontFamily: 'Inter',
-                color: const Color(0xFFF9F8F8),
+                color: Colors.black,
                 fontWeight: FontWeight.w800,
                 fontSize: fontSize,
               ),
@@ -325,32 +359,13 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
           ),
         ),
         SizedBox(width: 8 * scaleFactor),
-        ElevatedButton(
-          onPressed: () => _reuseAlarm(alarm),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: horizontalPadding / 2,
-            ),
-            minimumSize: Size(buttonWidth, buttonHeight),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18 * scaleFactor),
-            ),
-            elevation: 0,
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              'Use',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-                fontWeight: FontWeight.w800,
-                fontSize: fontSize,
-              ),
-            ),
-          ),
+        Switch(
+          value: isActive,
+          onChanged: (value) => _reuseAlarm(alarm, value),
+          activeColor: Colors.white,
+          activeTrackColor: Theme.of(context).primaryColor,
+          inactiveThumbColor: Colors.grey[400],
+          inactiveTrackColor: Colors.grey[700],
         ),
       ],
     );

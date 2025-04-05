@@ -459,6 +459,9 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
             }
 
+            // Load volume from shared preferences
+            val volume = loadVolumeSetting(context)
+
             // Determine which sound to play
             val soundResId = when (soundId) {
                 1 -> R.raw.sound_1
@@ -477,15 +480,37 @@ class AlarmReceiver : BroadcastReceiver() {
             mediaPlayer?.apply {
                 setDataSource(assetFileDescriptor.fileDescriptor, assetFileDescriptor.startOffset, assetFileDescriptor.length)
                 isLooping = true
-                setVolume(1.0f, 1.0f)
+                setVolume(volume, volume)
                 prepare()
                 start()
             }
             assetFileDescriptor.close()
 
-            Log.d(TAG, "Fallback sound playback started successfully")
+            Log.d(TAG, "Fallback sound playback started successfully with volume: $volume")
         } catch (e: Exception) {
             Log.e(TAG, "Error in fallback sound playback", e)
+        }
+    }
+
+    // Add a method to load the volume setting from shared preferences
+    private fun loadVolumeSetting(context: Context): Float {
+        try {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val savedVolume = prefs.getInt("flutter.alarm_volume", -1)
+            
+            if (savedVolume != -1) {
+                // Convert from percentage (0-100) to float (0.0-1.0)
+                val volume = savedVolume / 100.0f
+                Log.d(TAG, "Loaded volume setting from preferences: $savedVolume% ($volume)")
+                return volume
+            } else {
+                // Default volume if not set
+                Log.d(TAG, "Using default volume: 0.7")
+                return 0.7f
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading volume setting, using default", e)
+            return 0.7f
         }
     }
 

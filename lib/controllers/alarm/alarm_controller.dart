@@ -36,6 +36,8 @@ class AlarmController extends GetxController {
   final RxInt refreshTimestamp = DateTime.now().millisecondsSinceEpoch.obs;
   final RxString currentTime = DateFormat('HH:mm').format(DateTime.now()).obs;
   final RxInt activeAlarmId = RxInt(-1);
+  final RxBool hasActiveAlarm = false.obs;
+  final RxBool shouldShowStopScreen = false.obs;
 
   late SharedPreferences _prefs;
   Timer? _clockTimer;
@@ -48,8 +50,13 @@ class AlarmController extends GetxController {
     _startClockTimer();
     loadAlarms();
     _loadSavedVolume();
-
-    Timer.periodic(const Duration(minutes: 1), (_) {
+    
+    // Check for active alarms immediately
+    _checkForActiveAlarms();
+    
+    // Periodically check for active alarms
+    Timer.periodic(const Duration(seconds: 15), (_) {
+      _checkForActiveAlarms();
       verifyAlarmStates();
     });
   }
@@ -357,6 +364,15 @@ class AlarmController extends GetxController {
         _alarmSoundTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
           _increaseAlarmVolumeGradually();
         });
+        
+        // Update the shouldShowStopScreen value to indicate that the stop alarm screen should be shown
+        shouldShowStopScreen.value = true;
+        hasActiveAlarm.value = true;
+        
+        // Store the active alarm ID in shared preferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('flutter.active_alarm_id', alarmId);
+        await prefs.setInt('flutter.active_alarm_sound', soundId);
 
         _enableAlarmWakeLock();
       }
@@ -409,6 +425,8 @@ class AlarmController extends GetxController {
     _audioPlayer.stop();
     _alarmSoundTimer?.cancel();
     activeAlarmId.value = -1;
+    shouldShowStopScreen.value = false;
+    hasActiveAlarm.value = false;
   }
 
   /// Updates volume setting for alarm playback
@@ -524,6 +542,7 @@ class AlarmController extends GetxController {
   void forceRefreshUI() {
     refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
     loadAlarms();
+    _checkForActiveAlarms();
     update();
   }
 
@@ -718,21 +737,47 @@ class AlarmController extends GetxController {
     _audioPlayer.dispose();
     super.onClose();
   }
+
+  /// Check for active alarms and update the hasActiveAlarm value
+  /// Also updates shouldShowStopScreen to indicate if the stop alarm screen should be shown
+  Future<void> _checkForActiveAlarms() async {
+    try {
+      final isActive = await AlarmBackgroundService.isAlarmActive();
+      if (isActive != hasActiveAlarm.value) {
+        hasActiveAlarm.value = isActive;
+        update();
+      }
+      
+      // If there's an active alarm, we should show the stop screen
+      if (isActive) {
+        final prefs = await SharedPreferences.getInstance();
+        final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
+        final activeSoundId = prefs.getInt('flutter.active_alarm_sound') ?? 1;
+        
+        if (activeAlarmId != null && activeAlarmId > 0) {
+          this.activeAlarmId.value = activeAlarmId;
+          shouldShowStopScreen.value = true;
+          
+          // Ensure the app stays awake while alarm is active
+          try {
+            await WakelockPlus.enable();
+          } catch (e) {
+            debugPrint('Error enabling wakelock: $e');
+          }
+        }
+      } else {
+        shouldShowStopScreen.value = false;
+        // Release wakelock if no active alarm
+        try {
+          await WakelockPlus.disable();
+        } catch (e) {
+          debugPrint('Error disabling wakelock: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking for active alarms: $e');
+    }
+  }
 }
 
 
-
-
-
-
-////////////////////////////
-
-
-
-
-
-/////////////////////////////
-
-
-
-//////////////////////////////////////////////

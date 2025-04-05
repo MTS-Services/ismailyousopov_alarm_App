@@ -50,7 +50,7 @@ class OnboardingController extends GetxController {
       image: 'assets/images/onboarding_4.png',
       title: '',
       description:
-          '1. All you need is an NFC tag, which you can order from our official website, find our website by going to settings and NFC.\n\n2. Once you have your NFC tag, On the main screen, tap the NFC icon to connect the tag.\n\n3. Set your alarm time: Choose the time you want to wake up and enable NFC.\n\nNow, when your alarm goes off in the morning, simply scan your NFC tag, and the alarm will stop.\n\nIts that simple!',
+          '1. All you need is an NFC tag, which you can order from our official website, find our website by going to settings and NFC.\n2. Once you have your NFC tag, On the main screen, tap the NFC icon to connect the tag.\n3. Set your alarm time: Choose the time you want to wake up and enable NFC.\nNow, when your alarm goes off in the morning, simply scan your NFC tag, and the alarm will stop.\nIts that simple!',
       buttonText: "Let's get started",
       containerColor: const Color(0xfff1f4f8),
       buttonColor: const Color(0xFFD9AC87),

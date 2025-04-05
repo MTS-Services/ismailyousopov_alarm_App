@@ -4,7 +4,7 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       primaryColor: const Color(0xFF811F3E),
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: const Color(0xFFf1f4f8),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
         elevation: 0,

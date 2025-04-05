@@ -58,11 +58,14 @@ class AlarmSoundService : Service() {
             // Request audio focus first
             requestAudioFocus()
 
+            // Load volume from shared preferences
+            loadVolumeSetting()
+
             // Play the alarm sound
             playAlarmSound(soundId)
 
-            // Set up volume increase over time
-            setupVolumeIncrease()
+            // Don't set up automatic volume increase if user has set a specific volume
+            // setupVolumeIncrease()
 
             Log.d(TAG, "Alarm sound started for sound ID: $soundId")
         } catch (e: Exception) {
@@ -232,7 +235,7 @@ class AlarmSoundService : Service() {
                 setVolume(currentVolume, currentVolume)
                 setOnPreparedListener {
                     it.start()
-                    Log.d(TAG, "Media player started")
+                    Log.d(TAG, "Media player started with volume: $currentVolume")
                 }
                 setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "Media player error: what=$what, extra=$extra")
@@ -366,42 +369,104 @@ class AlarmSoundService : Service() {
         }, 30000) // First increase after 30 seconds
     }
 
+    // Add a method to load the volume setting from shared preferences
+    private fun loadVolumeSetting() {
+        try {
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val savedVolume = prefs.getInt("flutter.alarm_volume", -1)
+            
+            if (savedVolume != -1) {
+                // Convert from percentage (0-100) to float (0.0-1.0)
+                currentVolume = savedVolume / 100.0f
+                Log.d(TAG, "Loaded volume setting from preferences: $savedVolume% ($currentVolume)")
+            } else {
+                // Default volume if not set
+                currentVolume = 0.7f
+                Log.d(TAG, "Using default volume: $currentVolume")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading volume setting, using default", e)
+            currentVolume = 0.7f
+        }
+    }
+
     override fun onDestroy() {
         Log.d(TAG, "Service being destroyed")
 
-        // Release media player
-        mediaPlayer?.apply {
-            if (isPlaying) {
-                stop()
+        // Release media player with better error handling
+        try {
+            mediaPlayer?.apply {
+                try {
+                    if (isPlaying) {
+                        stop()
+                        Log.d(TAG, "MediaPlayer stopped successfully")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping MediaPlayer", e)
+                } finally {
+                    try {
+                        reset()
+                        Log.d(TAG, "MediaPlayer reset successfully")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error resetting MediaPlayer", e)
+                    }
+                    
+                    try {
+                        release()
+                        Log.d(TAG, "MediaPlayer released successfully")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error releasing MediaPlayer", e)
+                    }
+                }
             }
-            release()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling MediaPlayer cleanup", e)
         }
         mediaPlayer = null
 
         // Release audio focus
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let {
+                    val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    audioManager.abandonAudioFocusRequest(it)
+                    Log.d(TAG, "Abandoned audio focus request (API 26+)")
+                }
+            } else {
+                @Suppress("DEPRECATION")
                 val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                audioManager.abandonAudioFocusRequest(it)
+                audioManager.abandonAudioFocus(null)
+                Log.d(TAG, "Abandoned audio focus (legacy)")
             }
-        } else {
-            @Suppress("DEPRECATION")
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            audioManager.abandonAudioFocus(null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing audio focus", e)
         }
+        audioFocusRequest = null
 
         // Release wake lock
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "Wake lock released")
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing wake lock", e)
         }
         wakeLock = null
 
         // Cancel volume increase handler
-        volumeIncreaseHandler?.removeCallbacksAndMessages(null)
+        try {
+            volumeIncreaseHandler?.removeCallbacksAndMessages(null)
+            Log.d(TAG, "Volume increase handler removed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error removing volume handlers", e)
+        }
+        volumeIncreaseHandler = null
 
         isServiceRunning = false
+        Log.d(TAG, "Service marked as not running")
 
         super.onDestroy()
     }

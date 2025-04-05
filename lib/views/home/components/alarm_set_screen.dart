@@ -88,6 +88,111 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
     Get.back();
   }
 
+  void _handleNfcSwitch(bool value) async {
+    if (value) {
+      final NFCController nfcController = Get.put(NFCController());
+
+      if (!nfcController.isNfcAvailable.value) {
+        Get.snackbar(
+          'NFC Not Available',
+          'Your device does not support NFC or NFC is disabled.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+
+      // Check if any tag is already registered system-wide
+      await nfcController.checkIfNfcRegistered();
+      if (nfcController.hasRegisteredNfcTag.value) {
+        // If a tag is already registered, simply enable NFC for this alarm
+        setState(() {
+          _nfcEnabled = true;
+        });
+        Get.snackbar(
+          'NFC Enabled',
+          'This alarm will now require NFC to stop',
+          backgroundColor: Colors.green[100],
+          colorText: Colors.black,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+
+      // Ask user if they want to register an NFC tag
+      final shouldRegister = await _showRegisterNfcDialog();
+      if (shouldRegister != true) {
+        // User declined to register tag, so don't enable NFC
+        return;
+      }
+
+      // Use a temporary ID for registration
+      int tempAlarmId = DateTime.now().millisecondsSinceEpoch;
+      final result = await Get.to(() => AddNFCWidget(alarmId: tempAlarmId));
+
+      // If the result is true, a tag was registered successfully
+      if (result == true) {
+        setState(() {
+          _nfcEnabled = true;
+        });
+      } else {
+        // If registration was canceled or unsuccessful, check if any w is registered
+        await nfcController.checkIfNfcRegistered();
+        setState(() {
+          _nfcEnabled = nfcController.hasRegisteredNfcTag.value;
+        });
+      }
+    } else {
+      // Turn off NFC requirement
+      setState(() {
+        _nfcEnabled = false;
+      });
+    }
+  }
+
+  /// Show dialog asking user if they want to register an NFC tag
+  Future<bool?> _showRegisterNfcDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Register NFC Tag',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'To use NFC to stop the alarm, you need to register an NFC tag first. Would you like to register a tag now?',
+            style: GoogleFonts.inter(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'No',
+                style: GoogleFonts.inter(
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                'Yes, Register',
+                style: GoogleFonts.inter(
+                  color: Theme.of(context).primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -349,39 +454,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                             ),
                             Switch(
                               value: _nfcEnabled,
-                              onChanged: (value) async {
-                                if (value) {
-                                  final NFCController nfcController =
-                                      Get.put(NFCController());
-
-                                  if (!nfcController.isNfcAvailable.value) {
-                                    Get.snackbar(
-                                      'NFC Not Available',
-                                      'Your device does not support NFC or NFC is disabled.',
-                                      backgroundColor: Colors.red,
-                                      colorText: Colors.white,
-                                      snackPosition: SnackPosition.BOTTOM,
-                                    );
-                                    return;
-                                  }
-
-                                  int? tempAlarmId = _isEditing
-                                      ? _editingAlarm!.id
-                                      : DateTime.now().millisecondsSinceEpoch;
-
-                                  final result = await Get.to(() =>
-                                      AddNFCWidget(alarmId: tempAlarmId!));
-
-                                  setState(() {
-                                    _nfcEnabled = result == true;
-                                  });
-                                } else {
-                                  // Simply turn off NFC requirement
-                                  setState(() {
-                                    _nfcEnabled = false;
-                                  });
-                                }
-                              },
+                              onChanged: _handleNfcSwitch,
                               activeColor: Colors.white,
                               activeTrackColor: Colors.black,
                             ),
@@ -445,6 +518,82 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                               ),
                             ],
                           ),
+                        ),
+                        
+                        // Volume Control
+                        const SizedBox(height: 20),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Volume',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                Obx(() => Text(
+                                  '${_alarmController.currentAlarmVolume.value}%',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black,
+                                  ),
+                                )),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(
+                                    Icons.volume_mute,
+                                    color: Colors.black,
+                                  ),
+                                  onPressed: () {
+                                    _alarmController.updateAlarmVolume(0);
+                                  },
+                                ),
+                                Expanded(
+                                  child: Obx(() => SliderTheme(
+                                    data: SliderThemeData(
+                                      thumbColor: Colors.black,
+                                      activeTrackColor: Colors.black,
+                                      inactiveTrackColor: Colors.grey[300],
+                                      trackHeight: 4.0,
+                                      thumbShape: const RoundSliderThumbShape(
+                                        enabledThumbRadius: 8.0,
+                                      ),
+                                    ),
+                                    child: Slider(
+                                      value: _alarmController.currentAlarmVolume.value.toDouble(),
+                                      min: 0,
+                                      max: 100,
+                                      onChanged: (value) {
+                                        _alarmController.updateAlarmVolume(value.round());
+                                      },
+                                    ),
+                                  )),
+                                ),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(
+                                    Icons.volume_up,
+                                    color: Colors.black,
+                                  ),
+                                  onPressed: () {
+                                    _alarmController.updateAlarmVolume(100);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ],
                     ),

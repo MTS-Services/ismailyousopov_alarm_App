@@ -689,22 +689,11 @@ class NotificationService {
 
       Future.delayed(const Duration(milliseconds: 300), () {
         try {
-          final alarmController = Get.isRegistered<AlarmController>()
-              ? Get.find<AlarmController>()
-              : Get.put(AlarmController());
-
-          final alarm = alarmController.getAlarmById(alarmId);
-          if (alarm != null && alarm.nfcRequired) {
-            Get.toNamed(
-              AppConstants.nfcScan,
-              arguments: {'alarmId': alarmId},
-            );
-          } else {
-            Get.toNamed(
-              AppConstants.stopAlarm,
-              arguments: {'alarmId': alarmId},
-            );
-          }
+          // Always navigate to stop alarm screen, regardless of NFC
+          Get.toNamed(
+            AppConstants.stopAlarm,
+            arguments: {'alarmId': alarmId, 'soundId': soundId},
+          );
         } catch (e) {
           debugPrint('Error navigating to alarm screen: $e');
         }
@@ -733,23 +722,11 @@ class NotificationService {
 
       Future.delayed(const Duration(milliseconds: 300), () {
         try {
-          final alarmController = Get.isRegistered<AlarmController>()
-              ? Get.find<AlarmController>()
-              : Get.put(AlarmController());
-
-          final alarm = alarmController.getAlarmById(alarmId);
-
-          if (alarm != null && alarm.nfcRequired) {
-            Get.toNamed(
-              AppConstants.nfcScan,
-              arguments: {'alarmId': alarmId},
-            );
-          } else {
-            Get.toNamed(
-              AppConstants.stopAlarm,
-              arguments: {'alarmId': alarmId},
-            );
-          }
+          // Always navigate to stop alarm screen, regardless of NFC
+          Get.toNamed(
+            AppConstants.stopAlarm,
+            arguments: {'alarmId': alarmId, 'soundId': soundId},
+          );
         } catch (e) {
           debugPrint('Error navigating to alarm screen: $e');
         }
@@ -790,8 +767,6 @@ class NotificationService {
       debugPrint('Error in notification tap background: $e');
     }
   }
-
-
 
   /// Schedules an alarm notification for a future time
   static Future<void> scheduleAlarmNotification({
@@ -946,7 +921,6 @@ class NotificationService {
       throw Exception('Failed to schedule alarm: $e');
     }
   }
-
 
   /// Starts the background service to play alarm sound with improved reliability
   static Future<void> _startAlarmSoundService(int alarmId, int soundId) async {

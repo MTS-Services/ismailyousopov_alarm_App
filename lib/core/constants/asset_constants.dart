@@ -9,10 +9,10 @@ class AppConstants {
   static const String alarmEdit = '/alarm_edit';
   static const String alarmSounds = '/alarm-sound';
   static const String sleepHistory = '/sleep_history';
-  static const String nfcScan = '/nfc_scan';
+  static const String nfcScan = '/alarm/nfcscan';
   static const String key = '/key';
-  static const String stopAlarm = '/stop_alarm';
-  static const String nfcSettings = '/nfc_settings';
+  static const String stopAlarm = '/alarm/stop';
+  static const String nfcSettings = '/settings/nfc';
   static const String appVersion = '/app_version';
   static const String settings = '/settings';
 }

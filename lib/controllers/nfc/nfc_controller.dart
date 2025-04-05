@@ -8,10 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class NFCController extends GetxController {
   final RxBool isNfcAvailable = false.obs;
   final RxBool isScanning = false.obs;
+  final RxBool hasNfcPermission = false.obs;
   final RxString lastScannedTag = ''.obs;
   final RxString registeredAlarmTag = ''.obs;
   final RxBool isVerifyingAlarm = false.obs;
   final RxBool verificationSuccess = false.obs;
+  final RxBool hasRegisteredNfcTag = false.obs;
 
   /// Hard-coded backup code for now
   final String backupCode = '12345';
@@ -21,15 +23,34 @@ class NFCController extends GetxController {
     super.onInit();
     checkNfcAvailability();
     loadRegisteredTag();
+    checkIfNfcRegistered();
   }
 
   /// Check if NFC is available on the device
   Future<void> checkNfcAvailability() async {
     try {
       isNfcAvailable.value = await NfcManager.instance.isAvailable();
-      debugPrint('NFC Available: ${isNfcAvailable.value}');
+      hasNfcPermission.value = true; // Assume permissions are good if we got here
+      
+      if (!isNfcAvailable.value) {
+        Get.snackbar('NFC Status', 'NFC is not available on this device', 
+          snackPosition: SnackPosition.BOTTOM);
+      }
     } catch (e) {
-      debugPrint('Error checking NFC availability: $e');
+      // Check if this is a permission error
+      if (e.toString().contains('permission')) {
+        hasNfcPermission.value = false;
+        Get.snackbar(
+          'Permission Error', 
+          'NFC permission denied. Please grant NFC permission in settings.',
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 5),
+          backgroundColor: Colors.red[100],
+        );
+      } else {
+        Get.snackbar('NFC Error', 'Error checking NFC availability: $e',
+          snackPosition: SnackPosition.BOTTOM);
+      }
       isNfcAvailable.value = false;
     }
   }
@@ -38,11 +59,15 @@ class NFCController extends GetxController {
   Future<void> saveTagForAlarm(String tagId, int alarmId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('alarm_tag_$alarmId', tagId);
+      // Store the tag globally without linking to a specific alarm ID
+      await prefs.setString('global_nfc_tag', tagId);
       registeredAlarmTag.value = tagId;
-      debugPrint('Tag saved for alarm $alarmId: $tagId');
+      hasRegisteredNfcTag.value = true;
+      Get.snackbar('Tag Saved', 'NFC tag registered successfully',
+        snackPosition: SnackPosition.BOTTOM);
     } catch (e) {
-      debugPrint('Error saving tag for alarm: $e');
+      Get.snackbar('Error', 'Failed to save NFC tag: $e', 
+        snackPosition: SnackPosition.BOTTOM);
     }
   }
 
@@ -50,10 +75,18 @@ class NFCController extends GetxController {
   Future<void> loadRegisteredTagForAlarm(int alarmId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      registeredAlarmTag.value = prefs.getString('alarm_tag_$alarmId') ?? '';
-      debugPrint('Loaded tag for alarm $alarmId: ${registeredAlarmTag.value}');
+      // Load the global tag instead of alarm-specific tag
+      registeredAlarmTag.value = prefs.getString('global_nfc_tag') ?? '';
+      if (registeredAlarmTag.value.isNotEmpty) {
+        hasRegisteredNfcTag.value = true;
+      }
+      if (registeredAlarmTag.value.isEmpty) {
+        Get.snackbar('Tag Status', 'No NFC tag registered',
+          snackPosition: SnackPosition.BOTTOM);
+      }
     } catch (e) {
-      debugPrint('Error loading registered tag for alarm $alarmId: $e');
+      Get.snackbar('Error', 'Failed to load NFC tag: $e',
+        snackPosition: SnackPosition.BOTTOM);
     }
   }
 
@@ -61,12 +94,31 @@ class NFCController extends GetxController {
   Future<void> loadRegisteredTag() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      // Check for global tag first
+      final globalTag = prefs.getString('global_nfc_tag');
+      if (globalTag != null && globalTag.isNotEmpty) {
+        registeredAlarmTag.value = globalTag;
+        hasRegisteredNfcTag.value = true;
+        debugPrint('Found registered global tag: ${registeredAlarmTag.value}');
+        return;
+      }
+      
+      // For migration: check for any old alarm-specific tags
       final keys = prefs.getKeys();
       for (final key in keys) {
         if (key.startsWith('alarm_tag_')) {
-          registeredAlarmTag.value = prefs.getString(key) ?? '';
-          debugPrint('Found registered tag: ${registeredAlarmTag.value}');
-          break;
+          final oldTag = prefs.getString(key) ?? '';
+          if (oldTag.isNotEmpty) {
+            // Migrate to global tag
+            await prefs.setString('global_nfc_tag', oldTag);
+            // Remove old alarm-specific tag
+            await prefs.remove(key);
+            
+            registeredAlarmTag.value = oldTag;
+            hasRegisteredNfcTag.value = true;
+            debugPrint('Migrated alarm-specific tag to global: ${registeredAlarmTag.value}');
+            break;
+          }
         }
       }
     } catch (e) {
@@ -80,27 +132,29 @@ class NFCController extends GetxController {
     required Function() onError,
   }) async {
     if (!isNfcAvailable.value) {
-      debugPrint('NFC not available');
+      Get.snackbar('NFC Error', 'NFC not available on this device',
+        snackPosition: SnackPosition.BOTTOM);
       onError();
       return;
     }
 
     isScanning.value = true;
-    debugPrint('Starting NFC scan...');
+    Get.snackbar('NFC', 'Starting NFC scan...', snackPosition: SnackPosition.BOTTOM);
 
     try {
       NfcManager.instance.startSession(
         onDiscovered: (NfcTag tag) async {
           final id = _getTagId(tag);
           lastScannedTag.value = id;
-          debugPrint('NFC tag detected: $id');
+          Get.snackbar('NFC', 'Tag detected: $id', snackPosition: SnackPosition.BOTTOM);
           onTagDetected(id);
           await NfcManager.instance.stopSession();
           isScanning.value = false;
         },
       );
     } catch (e) {
-      debugPrint('Error starting NFC scan: $e');
+      Get.snackbar('NFC Error', 'Failed to start NFC scan: $e',
+        snackPosition: SnackPosition.BOTTOM);
       isScanning.value = false;
       onError();
     }
@@ -111,10 +165,12 @@ class NFCController extends GetxController {
     if (isScanning.value) {
       try {
         await NfcManager.instance.stopSession();
-        isScanning.value = false;
-        debugPrint('NFC scan stopped');
+        Get.snackbar('NFC', 'NFC scan stopped', snackPosition: SnackPosition.BOTTOM);
       } catch (e) {
-        debugPrint('Error stopping NFC scan: $e');
+        Get.snackbar('NFC Error', 'Error stopping NFC scan: $e',
+          snackPosition: SnackPosition.BOTTOM);
+      } finally {
+        isScanning.value = false;
       }
     }
   }
@@ -123,17 +179,22 @@ class NFCController extends GetxController {
   Future<bool> verifyTagForAlarm(String scannedTagId, int alarmId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedTagId = prefs.getString('alarm_tag_$alarmId') ?? '';
+      // Use the global tag instead of alarm-specific tag
+      final savedTagId = prefs.getString('global_nfc_tag') ?? '';
       final isVerified = savedTagId.isNotEmpty && savedTagId == scannedTagId;
 
-      debugPrint('Verifying tag for alarm $alarmId:');
-      debugPrint('  Scanned tag: $scannedTagId');
-      debugPrint('  Saved tag: $savedTagId');
-      debugPrint('  Verification result: $isVerified');
+      if (isVerified) {
+        Get.snackbar('Verification', 'Tag matched successfully',
+          snackPosition: SnackPosition.BOTTOM);
+      } else {
+        Get.snackbar('Verification', 'Tag does not match the registered tag',
+          snackPosition: SnackPosition.BOTTOM);
+      }
 
       return isVerified;
     } catch (e) {
-      debugPrint('Error verifying tag for alarm: $e');
+      Get.snackbar('Error', 'Error verifying tag: $e',
+        snackPosition: SnackPosition.BOTTOM);
       return false;
     }
   }
@@ -141,20 +202,53 @@ class NFCController extends GetxController {
   /// Verify backup code
   bool verifyBackupCode(String code) {
     final isValid = code == backupCode;
-    debugPrint('Verifying backup code: $code, Valid: $isValid');
+    if (isValid) {
+      Get.snackbar('Success', 'Backup code verified',
+        snackPosition: SnackPosition.BOTTOM);
+    } else {
+      Get.snackbar('Failed', 'Invalid backup code',
+        snackPosition: SnackPosition.BOTTOM);
+    }
     return isValid;
   }
 
   /// Register a new NFC tag for an alarm
   Future<bool> registerTagForAlarm(int alarmId) async {
+    if (!hasNfcPermission.value) {
+      Get.snackbar(
+        'Permission Error', 
+        'NFC permission required. Please grant NFC permission in settings.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red[100],
+        duration: const Duration(seconds: 5),
+      );
+      return false;
+    }
+    
     if (!isNfcAvailable.value) {
-      debugPrint('NFC not available for registration');
+      Get.snackbar('NFC Error', 'NFC not available for registration',
+        snackPosition: SnackPosition.BOTTOM);
+      return false;
+    }
+    
+    // Check if any NFC tag is already registered in the system
+    await checkIfNfcRegistered();
+    if (hasRegisteredNfcTag.value) {
+      Get.snackbar(
+        'NFC Tag Already Registered', 
+        'Please remove the existing NFC tag before registering a new one.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.amber[100],
+        duration: const Duration(seconds: 5),
+      );
       return false;
     }
 
     try {
       isScanning.value = true;
-      debugPrint('Starting NFC registration for alarm $alarmId...');
+      Get.snackbar('NFC', 'Tap an NFC tag to register',
+        snackPosition: SnackPosition.BOTTOM, 
+        duration: const Duration(seconds: 5));
 
       final completer = Completer<bool>();
 
@@ -162,15 +256,35 @@ class NFCController extends GetxController {
         onDiscovered: (NfcTag tag) async {
           try {
             final id = _getTagId(tag);
-            debugPrint('Tag detected during registration: $id');
+            Get.snackbar('NFC', 'Tag detected: $id',
+              snackPosition: SnackPosition.BOTTOM);
             await saveTagForAlarm(id, alarmId);
-            await NfcManager.instance.stopSession();
+            
+            try {
+              await NfcManager.instance.stopSession();
+            } catch (stopError) {
+              Get.snackbar('NFC Warning', 'Error stopping NFC session: $stopError',
+                snackPosition: SnackPosition.BOTTOM);
+            }
+            
             isScanning.value = false;
             if (!completer.isCompleted) {
+              Get.snackbar('Success', 'Tag registered successfully',
+                snackPosition: SnackPosition.BOTTOM);
               completer.complete(true);
             }
           } catch (e) {
-            debugPrint('Error processing tag during registration: $e');
+            Get.snackbar('Error', 'Failed to register tag: $e',
+              snackPosition: SnackPosition.BOTTOM);
+            
+            try {
+              await NfcManager.instance.stopSession();
+            } catch (stopError) {
+              Get.snackbar('NFC Warning', 'Error stopping NFC session: $stopError',
+                snackPosition: SnackPosition.BOTTOM);
+            }
+            
+            isScanning.value = false;
             if (!completer.isCompleted) {
               completer.complete(false);
             }
@@ -178,18 +292,19 @@ class NFCController extends GetxController {
         },
       );
 
-      /// Wait for tag detection or timeout after 60 seconds
       Timer(const Duration(seconds: 60), () {
         if (!completer.isCompleted) {
           stopNfcScan();
-          debugPrint('NFC registration timed out');
+          Get.snackbar('Timeout', 'NFC registration timed out',
+            snackPosition: SnackPosition.BOTTOM);
           completer.complete(false);
         }
       });
 
       return completer.future;
     } catch (e) {
-      debugPrint('Error registering NFC tag: $e');
+      Get.snackbar('Error', 'Failed to register NFC tag: $e',
+        snackPosition: SnackPosition.BOTTOM);
       isScanning.value = false;
       return false;
     }
@@ -201,13 +316,15 @@ class NFCController extends GetxController {
     verificationSuccess.value = false;
     await loadRegisteredTagForAlarm(alarmId);
 
-    debugPrint('Starting alarm verification for alarm $alarmId');
-    debugPrint('Looking for registered tag: ${registeredAlarmTag.value}');
+    Get.snackbar('Verification', 'Scan the NFC tag to turn off alarm',
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 3));
 
     final completer = Completer<bool>();
 
     if (!isNfcAvailable.value) {
-      debugPrint('NFC not available for verification');
+      Get.snackbar('NFC Error', 'NFC not available for verification',
+        snackPosition: SnackPosition.BOTTOM);
       isVerifyingAlarm.value = false;
       completer.complete(false);
       return completer.future;
@@ -219,7 +336,8 @@ class NFCController extends GetxController {
           try {
             final id = _getTagId(tag);
             lastScannedTag.value = id;
-            debugPrint('Tag detected during verification: $id');
+            Get.snackbar('NFC', 'Tag detected during verification',
+              snackPosition: SnackPosition.BOTTOM);
 
             final isVerified = await verifyTagForAlarm(id, alarmId);
             verificationSuccess.value = isVerified;
@@ -228,11 +346,20 @@ class NFCController extends GetxController {
             isScanning.value = false;
             isVerifyingAlarm.value = false;
 
+            if (isVerified) {
+              Get.snackbar('Success', 'Tag verified successfully',
+                snackPosition: SnackPosition.BOTTOM);
+            } else {
+              Get.snackbar('Failed', 'Incorrect tag scanned',
+                snackPosition: SnackPosition.BOTTOM);
+            }
+
             if (!completer.isCompleted) {
               completer.complete(isVerified);
             }
           } catch (e) {
-            debugPrint('Error during tag verification: $e');
+            Get.snackbar('Error', 'Error during tag verification: $e',
+              snackPosition: SnackPosition.BOTTOM);
             if (!completer.isCompleted) {
               completer.complete(false);
             }
@@ -240,19 +367,20 @@ class NFCController extends GetxController {
         },
       );
 
-      /// Set a timeout for the NFC scan
       Timer(const Duration(seconds: 60), () {
         if (!completer.isCompleted) {
           stopNfcScan();
           isVerifyingAlarm.value = false;
-          debugPrint('NFC verification timed out');
+          Get.snackbar('Timeout', 'NFC verification timed out',
+            snackPosition: SnackPosition.BOTTOM);
           completer.complete(false);
         }
       });
 
       return completer.future;
     } catch (e) {
-      debugPrint('Error verifying NFC tag for alarm: $e');
+      Get.snackbar('Error', 'Failed to verify NFC tag: $e',
+        snackPosition: SnackPosition.BOTTOM);
       isVerifyingAlarm.value = false;
       completer.complete(false);
       return completer.future;
@@ -261,40 +389,138 @@ class NFCController extends GetxController {
 
   /// Helper method to extract tag ID from NFC tag
   String _getTagId(NfcTag tag) {
-    /// Extract ID from different tag technologies
-    if (tag.data.containsKey('nfca')) {
-      final nfca = tag.data['nfca'];
-      if (nfca != null && nfca['identifier'] != null) {
-        return _bytesToHex(nfca['identifier']);
+    try {
+      /// Extract ID from different tag technologies
+      if (tag.data.containsKey('nfca')) {
+        final nfca = tag.data['nfca'];
+        if (nfca != null && nfca['identifier'] != null) {
+          return _bytesToHex(nfca['identifier']);
+        }
       }
-    }
 
-    if (tag.data.containsKey('nfcb')) {
-      final nfcb = tag.data['nfcb'];
-      if (nfcb != null && nfcb['applicationData'] != null) {
-        return _bytesToHex(nfcb['applicationData']);
+      if (tag.data.containsKey('nfcb')) {
+        final nfcb = tag.data['nfcb'];
+        if (nfcb != null && nfcb['applicationData'] != null) {
+          return _bytesToHex(nfcb['applicationData']);
+        }
       }
-    }
 
-    if (tag.data.containsKey('ndef')) {
-      final ndef = tag.data['ndef'];
-      if (ndef != null && ndef['identifier'] != null) {
-        return _bytesToHex(ndef['identifier']);
+      if (tag.data.containsKey('ndef')) {
+        final ndef = tag.data['ndef'];
+        if (ndef != null && ndef['identifier'] != null && ndef['identifier'] is List<int>) {
+          return _bytesToHex(ndef['identifier']);
+        }
       }
-    }
 
-    /// Generate a unique tag ID from the raw data
-    return tag.data.toString().hashCode.toString();
+      /// If we can't extract a specific ID, create a fallback ID from the hash
+      debugPrint('Using fallback tag ID generation: ${tag.data.toString().hashCode}');
+      return 'tag-${tag.data.toString().hashCode.abs()}';
+    } catch (e) {
+      debugPrint('Error extracting tag ID: $e');
+      /// Safe fallback for any exceptions
+      return 'unknown-${DateTime.now().millisecondsSinceEpoch}';
+    }
   }
 
-  /// Helper method to convert bytes to hex string
-  String _bytesToHex(List<int> bytes) {
-    return bytes.map((e) => e.toRadixString(16).padLeft(2, '0')).join(':');
+  /// Helper method to convert bytes to hex string with safe handling
+  String _bytesToHex(List<dynamic> bytes) {
+    try {
+      if (bytes is! List) {
+        return 'invalid-data';
+      }
+      
+      return bytes.map((e) {
+        if (e is int) {
+          return e.toRadixString(16).padLeft(2, '0');
+        } else {
+          return 'xx';
+        }
+      }).join(':');
+    } catch (e) {
+      debugPrint('Error in bytesToHex: $e');
+      return 'conversion-error';
+    }
   }
 
   /// Method to reset verification state
   void resetVerification() {
     isVerifyingAlarm.value = false;
     verificationSuccess.value = false;
+  }
+
+  /// Check if at least one NFC tag is registered
+  Future<bool> checkIfNfcRegistered() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Check for global tag
+      final globalTag = prefs.getString('global_nfc_tag') ?? '';
+      if (globalTag.isNotEmpty) {
+        hasRegisteredNfcTag.value = true;
+        return true;
+      }
+      
+      // For backward compatibility - check old storage format
+      final keys = prefs.getKeys();
+      for (final key in keys) {
+        if (key.startsWith('alarm_tag_')) {
+          final tagId = prefs.getString(key) ?? '';
+          if (tagId.isNotEmpty) {
+            // Migrate to global tag
+            await prefs.setString('global_nfc_tag', tagId);
+            await prefs.remove(key);
+            
+            hasRegisteredNfcTag.value = true;
+            return true;
+          }
+        }
+      }
+      
+      hasRegisteredNfcTag.value = false;
+      return false;
+    } catch (e) {
+      debugPrint('Error checking if NFC is registered: $e');
+      hasRegisteredNfcTag.value = false;
+      return false;
+    }
+  }
+
+  /// Remove all registered NFC tags
+  Future<bool> removeAllNfcTags() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      bool anyRemoved = false;
+      
+      // Remove global tag
+      if (prefs.containsKey('global_nfc_tag')) {
+        await prefs.remove('global_nfc_tag');
+        anyRemoved = true;
+      }
+      
+      // Also clean up any old alarm-specific tags
+      final keys = prefs.getKeys().toList();
+      for (final key in keys) {
+        if (key.startsWith('alarm_tag_')) {
+          await prefs.remove(key);
+          anyRemoved = true;
+        }
+      }
+      
+      if (anyRemoved) {
+        hasRegisteredNfcTag.value = false;
+        registeredAlarmTag.value = '';
+        Get.snackbar('Success', 'NFC tag removed successfully',
+          snackPosition: SnackPosition.BOTTOM);
+      } else {
+        Get.snackbar('Info', 'No NFC tag found to remove',
+          snackPosition: SnackPosition.BOTTOM);
+      }
+      
+      return anyRemoved;
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to remove NFC tag: $e',
+        snackPosition: SnackPosition.BOTTOM);
+      return false;
+    }
   }
 }

@@ -4,22 +4,24 @@ import 'package:get/get.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
 import '../../../controllers/nfc/nfc_controller.dart';
 import '../../../core/services/background_service.dart';
+import '../../../core/constants/asset_constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class AlarmStopWidget extends StatefulWidget {
+class AlarmStopScreen extends StatefulWidget {
   final int alarmId;
   final int soundId;
 
-  const AlarmStopWidget({
+  const AlarmStopScreen({
     super.key,
     required this.alarmId,
     this.soundId = 1,
   });
 
   @override
-  State<AlarmStopWidget> createState() => _AlarmStopWidgetState();
+  State<AlarmStopScreen> createState() => _AlarmStopWidgetState();
 }
 
-class _AlarmStopWidgetState extends State<AlarmStopWidget>
+class _AlarmStopWidgetState extends State<AlarmStopScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _shimmerController;
   final NFCController _nfcController = Get.put(NFCController());
@@ -38,9 +40,24 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
       vsync: this,
     )..repeat();
 
-    _ensureAlarmIsActive();
-
-    _startNfcVerification();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Clean up any directToStop flags (we've already handled it by being here)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('flutter.direct_to_stop');
+      
+      await _ensureAlarmIsActive();
+      
+      // Get the alarm object to check if NFC is required
+      final alarm = _alarmController.getAlarmById(widget.alarmId);
+      if (alarm != null && alarm.nfcRequired) {
+        // NFC is required - initialize the NFC verification process
+        // but keep the user on this screen
+        await _startNfcVerification();
+      } else {
+        // No NFC required - just show the regular stop options
+        // Don't call _startNfcVerification()
+      }
+    });
   }
 
   @override
@@ -54,12 +71,27 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
 
   Future<void> _ensureAlarmIsActive() async {
     try {
+      // Check if this is from a direct stop intent first
+      final prefs = await SharedPreferences.getInstance();
+      final launchDirectToStop = prefs.getBool('flutter.direct_to_stop') ?? false;
+      
+      // Set active alarm IDs even if coming from direct stop
+      await prefs.setInt('flutter.active_alarm_id', widget.alarmId);
+      await prefs.setInt('flutter.active_alarm_sound', widget.soundId);
+      
+      // Update the controller
+      _alarmController.activeAlarmId.value = widget.alarmId;
+      
       final isActive = await AlarmBackgroundService.isAlarmActive();
       if (!isActive) {
-        await AlarmBackgroundService.forceStartAlarmIfNeeded(
-            widget.alarmId,
-            widget.soundId
-        );
+        // If we're coming from a direct stop button, we might not need to start the alarm again
+        // since we just want to show the stop screen
+        if (!launchDirectToStop) {
+          await AlarmBackgroundService.forceStartAlarmIfNeeded(
+              widget.alarmId,
+              widget.soundId
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error ensuring alarm is active: $e');
@@ -82,8 +114,35 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
     final success = await _nfcController.startAlarmVerification(widget.alarmId);
 
     if (success) {
-      await _alarmController.stopAlarm(widget.alarmId, soundId: widget.soundId);
-      Get.back();
+      try {
+        // First stop the background service to ensure native services are stopped
+        await AlarmBackgroundService.stopAlarm();
+        
+        // Then stop the alarm sound in Flutter
+        _alarmController.stopAlarmSound();
+        
+        // Then update the database state
+        await _alarmController.stopAlarm(widget.alarmId, soundId: widget.soundId);
+        
+        // Add a safety delay
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        // Double-check alarm is actually stopped
+        bool isStillActive = await AlarmBackgroundService.isAlarmActive();
+        if (isStillActive) {
+          // Force emergency stop as backup
+          await AlarmBackgroundService.emergencyStopAllAlarms();
+          debugPrint('Used emergency stop because regular stop failed');
+        }
+        
+        // Navigate back to home
+        Get.offNamed(AppConstants.home);
+      } catch (e) {
+        debugPrint('Error stopping alarm: $e');
+        // Try emergency stop as a fallback
+        await AlarmBackgroundService.emergencyStopAllAlarms();
+        Get.offNamed(AppConstants.home);
+      }
     } else {
       isVerifying.value = false;
       showErrorMessage.value = true;
@@ -93,13 +152,39 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
   }
 
   /// verify backup code
-  void _verifyBackupCode() {
+  void _verifyBackupCode() async {
     final code = _backupCodeController.text.trim();
 
     if (_nfcController.verifyBackupCode(code)) {
-      _alarmController.stopAlarm(widget.alarmId, soundId: widget.soundId);
-      Navigator.of(context).pop();
-      Get.back();
+      try {
+        // First stop the background service to ensure native services are stopped
+        await AlarmBackgroundService.stopAlarm();
+        
+        // Then stop the alarm sound in Flutter
+        _alarmController.stopAlarmSound();
+        
+        // Then update the database state
+        await _alarmController.stopAlarm(widget.alarmId, soundId: widget.soundId);
+        
+        // Add a safety delay
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        // Double-check alarm is actually stopped
+        bool isStillActive = await AlarmBackgroundService.isAlarmActive();
+        if (isStillActive) {
+          // Force emergency stop as backup
+          await AlarmBackgroundService.emergencyStopAllAlarms();
+          debugPrint('Used emergency stop because regular stop failed');
+        }
+        
+        // Navigate back to home
+        Get.offNamed(AppConstants.home);
+      } catch (e) {
+        debugPrint('Error stopping alarm: $e');
+        // Try emergency stop as a fallback
+        await AlarmBackgroundService.emergencyStopAllAlarms();
+        Get.offNamed(AppConstants.home);
+      }
     } else {
       showErrorMessage.value = true;
       errorMessage.value = 'Invalid backup code. Please try again.';
@@ -197,230 +282,250 @@ class _AlarmStopWidgetState extends State<AlarmStopWidget>
     final screenSize = MediaQuery.of(context).size;
     final isSmallScreen = screenSize.width < 360;
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {},
+    return WillPopScope(
+      onWillPop: () async {
+        // Check if alarm is still active
+        final isActive = await AlarmBackgroundService.isAlarmActive();
+        if (isActive) {
+          // Show a message to the user
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please stop the alarm before navigating back'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return false;
+        }
+        return true;
+      },
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                // Do nothing - prevent navigation away from stop alarm screen
+              },
+            ),
           ),
-        ),
-        body: SafeArea(
-          child: LayoutBuilder(builder: (context, constraints) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: constraints.maxWidth * 0.06,
-                    top: constraints.maxHeight * 0.02,
-                  ),
-                  child: GestureDetector(
-                    onTap: _showBackupCodeDialog,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          size: 36,
-                          color: Colors.black,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Help!',
-                          style: GoogleFonts.inter(
-                            color: Colors.black,
-                            fontSize: isSmallScreen ? 20 : 24,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+          body: SafeArea(
+            child: LayoutBuilder(builder: (context, constraints) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: constraints.maxWidth * 0.06,
+                      top: constraints.maxHeight * 0.02,
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    child: GestureDetector(
+                      onTap: _showBackupCodeDialog,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Stack(
-                            children: [
-                              Container(
-                                width: constraints.maxWidth * 0.6,
-                                height: constraints.maxHeight * 0.4,
-                                constraints: const BoxConstraints(
-                                  maxWidth: 250,
-                                  maxHeight: 320,
-                                  minWidth: 180,
-                                  minHeight: 240,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      blurRadius: 4,
-                                      color: Color(0xFF040000),
-                                      offset: Offset(0, 2),
-                                    )
-                                  ],
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Stack(
-                                  children: [
-                                    Align(
-                                      alignment: Alignment.center,
-                                      child: Obx(() => Icon(
-                                            _nfcController
-                                                    .verificationSuccess.value
-                                                ? Icons.check_circle_outline
-                                                : Icons.nfc_rounded,
-                                            color: Colors.white,
-                                            size: isSmallScreen ? 160 : 220,
-                                          )),
-                                    ),
-                                    Align(
-                                      alignment: Alignment.topCenter,
-                                      child: Padding(
-                                        padding: EdgeInsets.only(
-                                            top: constraints.maxHeight * 0.025),
-                                        child: Obx(() => Text(
-                                              _nfcController
-                                                      .verificationSuccess.value
-                                                  ? 'Success!'
-                                                  : 'Scan to stop',
-                                              style: GoogleFonts.inter(
-                                                color: Colors.white,
-                                                fontSize:
-                                                    isSmallScreen ? 14 : 16,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            )),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Reactive shimmer effect
-                              Obx(
-                                () => _nfcController.verificationSuccess.value
-                                    ? const SizedBox()
-                                    : Positioned.fill(
-                                        child: AnimatedBuilder(
-                                          animation: _shimmerController,
-                                          builder: (context, child) {
-                                            return Container(
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(20),
-                                                gradient: LinearGradient(
-                                                  begin: Alignment.topLeft,
-                                                  end: Alignment.bottomRight,
-                                                  colors: const [
-                                                    Colors.transparent,
-                                                    Colors.white10,
-                                                    Colors.white24,
-                                                    Colors.white10,
-                                                    Colors.transparent,
-                                                  ],
-                                                  stops: [
-                                                    0.0,
-                                                    _shimmerController.value -
-                                                        0.2,
-                                                    _shimmerController.value,
-                                                    _shimmerController.value +
-                                                        0.2,
-                                                    1.0,
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                              ),
-                            ],
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            size: 36,
+                            color: Colors.black,
                           ),
-                          Padding(
-                            padding: EdgeInsets.only(
-                              top: constraints.maxHeight * 0.03,
-                              left: constraints.maxWidth * 0.05,
-                              right: constraints.maxWidth * 0.05,
-                            ),
-                            child: Container(
-                              width: constraints.maxWidth * 0.9,
-                              constraints: const BoxConstraints(
-                                maxWidth: 320,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              child: Center(
-                                child: Obx(() {
-                                  return Text(
-                                    showErrorMessage.value
-                                        ? errorMessage.value
-                                        : _nfcController.isVerifyingAlarm.value
-                                            ? 'Hold your device near the NFC tag'
-                                            : 'Press retry to scan again or use backup code',
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontSize: isSmallScreen ? 12 : 14,
-                                    ),
-                                  );
-                                }),
-                              ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Help!',
+                            style: GoogleFonts.inter(
+                              color: Colors.black,
+                              fontSize: isSmallScreen ? 20 : 24,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          Obx(() {
-                            if (!_nfcController.isVerifyingAlarm.value &&
-                                !_nfcController.verificationSuccess.value) {
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  top: constraints.maxHeight * 0.03,
-                                ),
-                                child: ElevatedButton(
-                                  onPressed: _startNfcVerification,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(25),
-                                    ),
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: isSmallScreen ? 20 : 30,
-                                      vertical: isSmallScreen ? 12 : 15,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Retry Scan',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontSize: isSmallScreen ? 14 : 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            } else {
-                              return const SizedBox();
-                            }
-                          }),
                         ],
                       ),
                     ),
                   ),
-                ),
-              ],
-            );
-          }),
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Stack(
+                              children: [
+                                Container(
+                                  width: constraints.maxWidth * 0.6,
+                                  height: constraints.maxHeight * 0.4,
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 250,
+                                    maxHeight: 320,
+                                    minWidth: 180,
+                                    minHeight: 240,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        blurRadius: 4,
+                                        color: Color(0xFF040000),
+                                        offset: Offset(0, 2),
+                                      )
+                                    ],
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      Align(
+                                        alignment: Alignment.center,
+                                        child: Obx(() => Icon(
+                                              _nfcController
+                                                      .verificationSuccess.value
+                                                  ? Icons.check_circle_outline
+                                                  : Icons.nfc_rounded,
+                                              color: Colors.white,
+                                              size: isSmallScreen ? 160 : 220,
+                                            )),
+                                      ),
+                                      Align(
+                                        alignment: Alignment.topCenter,
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                              top: constraints.maxHeight * 0.025),
+                                          child: Obx(() => Text(
+                                                _nfcController
+                                                        .verificationSuccess.value
+                                                    ? 'Success!'
+                                                    : 'Scan to stop',
+                                                style: GoogleFonts.inter(
+                                                  color: Colors.white,
+                                                  fontSize:
+                                                      isSmallScreen ? 14 : 16,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              )),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Reactive shimmer effect
+                                Obx(
+                                  () => _nfcController.verificationSuccess.value
+                                      ? const SizedBox()
+                                      : Positioned.fill(
+                                          child: AnimatedBuilder(
+                                            animation: _shimmerController,
+                                            builder: (context, child) {
+                                              return Container(
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.topLeft,
+                                                    end: Alignment.bottomRight,
+                                                    colors: const [
+                                                      Colors.transparent,
+                                                      Colors.white10,
+                                                      Colors.white24,
+                                                      Colors.white10,
+                                                      Colors.transparent,
+                                                    ],
+                                                    stops: [
+                                                      0.0,
+                                                      _shimmerController.value -
+                                                          0.2,
+                                                      _shimmerController.value,
+                                                      _shimmerController.value +
+                                                          0.2,
+                                                      1.0,
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                ),
+                              ],
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                top: constraints.maxHeight * 0.03,
+                                left: constraints.maxWidth * 0.05,
+                                right: constraints.maxWidth * 0.05,
+                              ),
+                              child: Container(
+                                width: constraints.maxWidth * 0.9,
+                                constraints: const BoxConstraints(
+                                  maxWidth: 320,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                                child: Center(
+                                  child: Obx(() {
+                                    return Text(
+                                      showErrorMessage.value
+                                          ? errorMessage.value
+                                          : _nfcController.isVerifyingAlarm.value
+                                              ? 'Hold your device near the NFC tag'
+                                              : 'Press retry to scan again or use backup code',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontSize: isSmallScreen ? 12 : 14,
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ),
+                            Obx(() {
+                              if (!_nfcController.isVerifyingAlarm.value &&
+                                  !_nfcController.verificationSuccess.value) {
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    top: constraints.maxHeight * 0.03,
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: _startNfcVerification,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(25),
+                                      ),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isSmallScreen ? 20 : 30,
+                                        vertical: isSmallScreen ? 12 : 15,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Retry Scan',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontSize: isSmallScreen ? 14 : 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                return const SizedBox();
+                              }
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
         ),
       ),
     );

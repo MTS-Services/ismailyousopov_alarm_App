@@ -22,6 +22,7 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
   bool _registrationSuccess = false;
   bool _showError = false;
   String _errorMessage = '';
+  bool _isAlreadyRegistered = false;
 
   @override
   void initState() {
@@ -31,7 +32,7 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
       vsync: this,
     )..repeat();
 
-    _startNfcRegistration();
+    _checkExistingTag();
   }
 
   @override
@@ -39,6 +40,21 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
     _shimmerController.dispose();
     _nfcController.stopNfcScan();
     super.dispose();
+  }
+
+  /// Check if a tag is already registered for this alarm
+  Future<void> _checkExistingTag() async {
+    // Check if any NFC tag is registered system-wide
+    await _nfcController.checkIfNfcRegistered();
+    
+    if (_nfcController.hasRegisteredNfcTag.value) {
+      setState(() {
+        _isAlreadyRegistered = true;
+        _registrationSuccess = true;
+      });
+    } else {
+      _startNfcRegistration();
+    }
   }
 
   /// nfc registration
@@ -56,20 +72,33 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
       return;
     }
 
-    final success = await _nfcController.registerTagForAlarm(widget.alarmId);
+    try {
+      final success = await _nfcController.registerTagForAlarm(widget.alarmId);
 
-    if (success) {
-      setState(() {
-        _registrationSuccess = true;
-      });
+      if (success) {
+        setState(() {
+          _registrationSuccess = true;
+        });
 
-      Future.delayed(const Duration(seconds: 2), () {
-        Get.back(result: true);
-      });
-    } else {
+        // Update the global registered tag status
+        _nfcController.hasRegisteredNfcTag.value = true;
+
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Get.back(result: true);
+          }
+        });
+      } else {
+        setState(() {
+          _showError = true;
+          _errorMessage = 'Failed to register NFC tag. Please try again.';
+        });
+      }
+    } catch (e) {
+      debugPrint('Exception during NFC registration: $e');
       setState(() {
         _showError = true;
-        _errorMessage = 'Failed to register NFC tag. Please try again.';
+        _errorMessage = 'An error occurred. Please try again.';
       });
     }
   }
@@ -91,7 +120,7 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
             },
           ),
           title: Text(
-            'Register NFC Tag',
+            _isAlreadyRegistered ? 'NFC Tag Registered' : 'Register NFC Tag',
             style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -147,7 +176,9 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
                                     padding: const EdgeInsets.only(top: 22),
                                     child: Text(
                                       _registrationSuccess
-                                          ? 'Tag Registered!'
+                                          ? _isAlreadyRegistered
+                                              ? 'NFC Tag Already Registered!'
+                                              : 'Tag Registered!'
                                           : 'Ready to scan',
                                       style: GoogleFonts.inter(
                                         color: _registrationSuccess
@@ -212,7 +243,9 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
                                 _showError
                                     ? _errorMessage
                                     : _registrationSuccess
-                                        ? 'NFC tag registered successfully!'
+                                        ? _isAlreadyRegistered
+                                            ? 'An NFC tag is already registered'
+                                            : 'NFC tag registered successfully!'
                                         : 'Hold your device near the NFC tag to register',
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
@@ -241,6 +274,33 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
                             ),
                             child: Text(
                               'Try Again',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      
+                      if (_isAlreadyRegistered)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 20),
+                          child: ElevatedButton(
+                            onPressed: () {
+                              _nfcController.stopNfcScan();
+                              Get.back();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 30, vertical: 15),
+                            ),
+                            child: Text(
+                              'OK',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontSize: 16,

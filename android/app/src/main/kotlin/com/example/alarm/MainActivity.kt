@@ -15,6 +15,8 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.util.Log
+import android.os.Handler
+import android.os.Looper
 
 class MainActivity: FlutterActivity() {
     private val TAG = "MainActivity"
@@ -371,21 +373,58 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun stopAlarmService() {
+        Log.d(TAG, "Starting alarm service shutdown sequence")
+        
+        // First, stop the AlarmSoundService explicitly
+        try {
+            val intent = Intent(this, AlarmSoundService::class.java)
+            val stopped = stopService(intent)
+            Log.d(TAG, "Stopping AlarmSoundService directly: success=$stopped")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping AlarmSoundService", e)
+        }
+        
         // Stop the alarm receiver
-        AlarmReceiver.stopAlarm()
-
-        // Also stop the sound service explicitly
-        val intent = Intent(this, AlarmSoundService::class.java)
-        stopService(intent)
+        try {
+            AlarmReceiver.stopAlarm()
+            Log.d(TAG, "AlarmReceiver.stopAlarm() called successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calling AlarmReceiver.stopAlarm()", e)
+        }
+        
+        // Cancel any ongoing notifications
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancelAll()
+            Log.d(TAG, "Cancelled all notifications")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling notifications", e)
+        }
+        
+        // Make a second attempt to stop the service with a slight delay
+        Handler(Looper.getMainLooper()).postDelayed({
+            try {
+                val intent = Intent(this, AlarmSoundService::class.java)
+                stopService(intent)
+                Log.d(TAG, "Second attempt to stop AlarmSoundService completed")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in second attempt to stop service", e)
+            }
+        }, 300)
 
         // Clear active alarm in preferences
-        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        prefs.edit()
-            .remove("flutter.active_alarm_id")
-            .remove("flutter.active_alarm_sound")
-            .apply()
+        try {
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove("flutter.active_alarm_id")
+                .remove("flutter.active_alarm_sound")
+                .apply()
+            Log.d(TAG, "Cleared active alarm from SharedPreferences")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing SharedPreferences", e)
+        }
 
-        Log.d(TAG, "Stopped alarm service and sound service")
+        Log.d(TAG, "Alarm service shutdown sequence completed")
     }
 
     private fun acquireWakeLock() {

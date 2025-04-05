@@ -17,6 +17,7 @@ import 'notification_service.dart';
 import 'sound_manager.dart';
 import 'dart:typed_data';
 
+@pragma('vm:entry-point')
 class AlarmBackgroundService {
   static final FlutterLocalNotificationsPlugin
       _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -60,7 +61,7 @@ class AlarmBackgroundService {
           isForegroundMode: true,
           notificationChannelId: 'alarm_foreground_service',
           initialNotificationTitle: 'Alarm Service',
-          initialNotificationContent: 'Preparing alarm...',
+          initialNotificationContent: 'Preparing alarm',
           foregroundServiceNotificationId: 888,
           autoStartOnBoot: true,
         ),
@@ -588,9 +589,22 @@ class AlarmBackgroundService {
 
       if (Platform.isAndroid) {
         try {
+          // First invoke forceStopService on the native side
           await _platform.invokeMethod('forceStopService');
+          
+          // Small delay to allow native operations to complete
+          await Future.delayed(const Duration(milliseconds: 300));
+          
+          // Also explicitly stop vibration
           await _platform.invokeMethod('stopVibration');
+          
+          // Cancel all notifications
           await _platform.invokeMethod('cancelAllNotifications');
+          
+          // Try a second time to force stop (extra safety)
+          await _platform.invokeMethod('forceStopService');
+          
+          debugPrint('Native services explicitly stopped');
         } catch (e) {
           debugPrint('Error stopping native service: $e');
         }
@@ -1641,12 +1655,15 @@ class AlarmBackgroundService {
 
           final int alarmId = launchData['alarmId'] ?? -1;
           final int soundId = launchData['soundId'] ?? 1;
+          final bool directToStop = launchData['directToStop'] ?? false;
 
           if (alarmId != -1) {
-            if (launchData['directToStop'] == true) {
-            } else {
+            if (!directToStop) {
               await forceStartAlarmIfNeeded(alarmId, soundId);
             }
+            
+            // We'll let the HomeScreen handle navigation based on this data
+            // The HomeScreen will check for the directToStop flag in _checkAlarmLaunchIntent
           }
         }
       }
