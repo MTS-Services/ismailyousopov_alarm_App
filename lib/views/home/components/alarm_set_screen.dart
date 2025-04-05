@@ -601,7 +601,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                   const SizedBox(height: 40),
                   // Action Buttons
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       ElevatedButton(
                         onPressed: () {
@@ -619,14 +619,15 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                           'Cancel',
                           style: GoogleFonts.inter(
                             color: Colors.white,
-                            fontSize: 12,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                       ElevatedButton(
                         onPressed: _saveAlarm,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
+                          backgroundColor: Colors.black,
                           fixedSize: const Size(150, 50),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25),
@@ -636,8 +637,9 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                         child: Text(
                           _isEditing ? 'Update' : 'Save',
                           style: GoogleFonts.inter(
-                            color: Colors.black,
-                            fontSize: 10,
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),

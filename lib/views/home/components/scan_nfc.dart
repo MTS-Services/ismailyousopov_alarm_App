@@ -265,12 +265,12 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
                           child: ElevatedButton(
                             onPressed: _startNfcRegistration,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
+                              backgroundColor: Theme.of(context).primaryColor,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(25),
                               ),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 30, vertical: 15),
+                                  horizontal: 50, vertical: 15),
                             ),
                             child: Text(
                               'Try Again',
