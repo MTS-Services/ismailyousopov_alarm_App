@@ -17,7 +17,7 @@ class AlarmSetScreen extends StatefulWidget {
 }
 
 class _AlarmSetScreenState extends State<AlarmSetScreen> {
-  final AlarmController _alarmController = Get.put(AlarmController());
+  final AlarmController _alarmController = Get.find<AlarmController>();
   bool _nfcEnabled = false;
   int _selectedSoundId = 1;
   DateTime _selectedDateTime = DateTime.now();
@@ -25,6 +25,8 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
   String _selectedSoundName = SoundManager.getSoundName(1);
   AlarmModel? _editingAlarm;
   bool _isEditing = false;
+  final NFCController nfcController = Get.put(NFCController());
+
 
   @override
   void initState() {
@@ -90,7 +92,6 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
 
   void _handleNfcSwitch(bool value) async {
     if (value) {
-      final NFCController nfcController = Get.put(NFCController());
 
       if (!nfcController.isNfcAvailable.value) {
         Get.snackbar(
@@ -125,24 +126,24 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
       if (shouldRegister != true) {
         // User declined to register tag, so don't enable NFC
         return;
+      } else if(shouldRegister == true) {
+        int tempAlarmId = DateTime.now().millisecondsSinceEpoch;
+        Get.to(() => AddNFCWidget(alarmId: tempAlarmId));
       }
 
-      // Use a temporary ID for registration
-      int tempAlarmId = DateTime.now().millisecondsSinceEpoch;
-      final result = await Get.to(() => AddNFCWidget(alarmId: tempAlarmId));
 
       // If the result is true, a tag was registered successfully
-      if (result == true) {
-        setState(() {
-          _nfcEnabled = true;
-        });
-      } else {
-        // If registration was canceled or unsuccessful, check if any w is registered
-        await nfcController.checkIfNfcRegistered();
-        setState(() {
-          _nfcEnabled = nfcController.hasRegisteredNfcTag.value;
-        });
-      }
+      // if (result == true) {
+      //   setState(() {
+      //     _nfcEnabled = true;
+      //   });
+      // } else {
+      //   // If registration was canceled or unsuccessful, check if any w is registered
+      //   await nfcController.checkIfNfcRegistered();
+      //   setState(() {
+      //     _nfcEnabled = nfcController.hasRegisteredNfcTag.value;
+      //   });
+      // }
     } else {
       // Turn off NFC requirement
       setState(() {

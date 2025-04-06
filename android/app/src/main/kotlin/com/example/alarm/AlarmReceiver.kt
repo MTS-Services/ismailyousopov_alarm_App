@@ -41,6 +41,7 @@ class AlarmReceiver : BroadcastReceiver() {
         private var safetyTimeoutHandler: Handler? = null
         private var vibrationHandler: Handler? = null
         private var vibrationRunnable: Runnable? = null
+        private var lastAlarmStartTime: Long = 0
 
         // Track last alarm time to prevent duplicate triggers
         private var lastAlarmTriggerTime: Long = 0
@@ -248,12 +249,22 @@ class AlarmReceiver : BroadcastReceiver() {
                 channel.description = "Channel for alarm notifications"
                 channel.enableVibration(true)
                 channel.enableLights(true)
+                channel.lightColor = android.graphics.Color.RED
                 channel.lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                channel.setBypassDnd(true)
-                channel.setSound(null, null) // No sound from notification itself
-
+                
+                // Don't silence the notification sounds - this was a key issue
+                // channel.setSound(null, null) 
+                
                 val notificationManager = context.getSystemService(NotificationManager::class.java)
                 notificationManager.createNotificationChannel(channel)
+                
+                // Also force deletion of any old channels that might have incorrect settings
+                try {
+                    notificationManager.deleteNotificationChannel("alarm_channel_old")
+                } catch (e: Exception) {
+                    // Ignore if channel doesn't exist
+                }
+                
                 Log.d(TAG, "Notification channel created")
             } catch (e: Exception) {
                 Log.e(TAG, "Error creating notification channel", e)
@@ -271,15 +282,34 @@ class AlarmReceiver : BroadcastReceiver() {
             // Also cancel any existing notification with our ID to avoid duplicates
             notificationManager.cancel(20000 + alarmId)
             notificationManager.cancel(10000) // Cancel the AlarmSoundService notification ID
-
+            
             // Store that we're using native notification
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             prefs.edit()
                 .putBoolean("flutter.using_native_notification", true)
                 .putString("flutter.notification_handler", "native")
+                .putInt("flutter.active_alarm_id", alarmId)
+                .putInt("flutter.active_alarm_sound", soundId)
+                .putInt("flutter.alarm_start_time", System.currentTimeMillis().toInt())
                 .apply()
-
-            // Create an intent that will directly open the stop alarm screen
+            
+            // Create intent to open the main activity when the notification is tapped
+            val intent = Intent(context, MainActivity::class.java).apply {
+                action = "com.example.alarm.STOP_ALARM"
+                putExtra("alarmId", alarmId)
+                putExtra("soundId", soundId)
+                putExtra("fromAlarm", true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                alarmId,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            // Create stop action
             val stopIntent = Intent(context, MainActivity::class.java).apply {
                 action = "com.example.alarm.STOP_ALARM"
                 putExtra("alarmId", alarmId)
@@ -288,68 +318,49 @@ class AlarmReceiver : BroadcastReceiver() {
                 putExtra("directToStop", true)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
-
+            
             val stopPendingIntent = PendingIntent.getActivity(
                 context,
-                alarmId + 1000, // Use a different request code to avoid conflicts
+                alarmId + 1000,
                 stopIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-            // Create the full screen intent
-            val fullScreenIntent = Intent(context, MainActivity::class.java).apply {
-                putExtra("alarmId", alarmId)
-                putExtra("soundId", soundId)
-                putExtra("fromAlarm", true)
-                putExtra("nfcRequired", nfcRequired)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-
-            val fullScreenPendingIntent = PendingIntent.getActivity(
-                context,
-                alarmId,
-                fullScreenIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-            // Create snooze intent
-            val snoozeIntent = Intent(context, MainActivity::class.java).apply {
-                action = "com.example.alarm.SNOOZE_ALARM"
-                putExtra("alarmId", alarmId)
-                putExtra("soundId", soundId)
-                putExtra("fromAlarm", true)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-
-            val snoozePendingIntent = PendingIntent.getActivity(
-                context,
-                alarmId + 2000,
-                snoozeIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-            val title = "Alarm"
-            val contentText = if (nfcRequired) "Scan NFC tag to stop alarm" else "Time to wake up!"
-
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(title)
-                .setContentText(contentText)
+                .setContentTitle("Alarm")
+                .setContentText(if (nfcRequired) "Scan NFC tag to stop alarm" else "Tap to stop the alarm")
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setFullScreenIntent(fullScreenPendingIntent, true)
-                .setAutoCancel(false)
+                .setFullScreenIntent(pendingIntent, true)
+                .setContentIntent(pendingIntent)
                 .setOngoing(true)
+                .setAutoCancel(false)
                 .setSound(null) // No sound from notification itself
-                .addAction(R.mipmap.ic_launcher, "Stop", stopPendingIntent)
-                .addAction(R.mipmap.ic_launcher, "Snooze", snoozePendingIntent)
-
+                .addAction(R.mipmap.ic_launcher, "Stop Alarm", stopPendingIntent)
+                // Add these for better visibility
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setColorized(true)
+                .setColor(0xFFFF0000.toInt())
+                .setUsesChronometer(true)
+                .setOnlyAlertOnce(false)
+            
             // Make the notification sticky
             val notification = builder.build()
             notification.flags = notification.flags or Notification.FLAG_INSISTENT or Notification.FLAG_NO_CLEAR
-
-            // Use a consistent notification ID that will be used by both AlarmReceiver and AlarmSoundService
+            
+            // Use a unique ID in the 20000 range for alarm notifications
             val notificationId = 20000 + alarmId
             notificationManager.notify(notificationId, notification)
-            Log.d(TAG, "Alarm notification shown for alarm ID: $alarmId with notification ID: $notificationId")
+            
+            // Update start time for timeout calculations
+            lastAlarmStartTime = System.currentTimeMillis()
+            
+            // Wake the screen for the notification
+            wakeScreen(context)
+            
+            Log.d(TAG, "Alarm notification shown with ID: $notificationId")
         } catch (e: Exception) {
             Log.e(TAG, "Error showing alarm notification", e)
         }
@@ -626,6 +637,42 @@ class AlarmReceiver : BroadcastReceiver() {
             Log.d(TAG, "Stored alarm state in SharedPreferences: alarmId=$alarmId, soundId=$soundId")
         } catch (e: Exception) {
             Log.e(TAG, "Error storing alarm state", e)
+        }
+    }
+
+    // Function to wake the screen for notifications
+    private fun wakeScreen(context: Context) {
+        try {
+            // Get the PowerManager
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            
+            // Check if the screen is already on
+            if (!powerManager.isInteractive) {
+                // Create a wake lock to turn on the screen
+                val screenWakeLock = powerManager.newWakeLock(
+                    PowerManager.FULL_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE,
+                    "alarm:ScreenWakeLock"
+                )
+                
+                // Acquire the wake lock briefly to turn on the screen
+                screenWakeLock.acquire(5000) // Release after 5 seconds
+                
+                // Launch MainActivity to help dismiss keyguard
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    action = "com.example.alarm.WAKE_SCREEN"
+                }
+                context.startActivity(intent)
+                
+                Log.d(TAG, "Screen wake lock acquired and activity launched")
+            } else {
+                Log.d(TAG, "Screen is already on, no need to wake")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error waking screen", e)
         }
     }
 

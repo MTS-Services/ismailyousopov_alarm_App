@@ -17,6 +17,9 @@ import io.flutter.plugin.common.MethodChannel
 import android.util.Log
 import android.os.Handler
 import android.os.Looper
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity: FlutterActivity() {
     private val TAG = "MainActivity"
@@ -62,18 +65,29 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Set alarm notification visibility
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+
         // Handle background service channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
 
-                // Inside the MethodChannel handler for CHANNEL
                 "isNativeNotificationActive" -> {
                     val alarmId = call.argument<Int>("alarmId") ?: 0
                     result.success(isNativeNotificationActive(alarmId))
                 }
 
-
-                // In your MethodChannel implementation
                 "cancelNotification" -> {
                     val alarmId = call.argument<Int>("alarmId") ?: 0
                     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -83,6 +97,9 @@ class MainActivity: FlutterActivity() {
                     notificationManager.cancel(20000 + alarmId) // Main alarm notification
                     notificationManager.cancel(30000 + alarmId) // Flutter notification
                     notificationManager.cancel(40000 + alarmId) // Timeout notification
+                    
+                    // Also cancel all notifications to be safe
+                    notificationManager.cancelAll()
 
                     result.success(true)
                 }
@@ -92,6 +109,7 @@ class MainActivity: FlutterActivity() {
                     bringToForeground()
                     result.success(true)
                 }
+                
                 "startForegroundService" -> {
                     val alarmId = call.argument<Int>("alarmId") ?: 0
                     val soundId = call.argument<Int>("soundId") ?: 1
@@ -103,10 +121,12 @@ class MainActivity: FlutterActivity() {
                     stopVibration()
                     result.success(true)
                 }
+                
                 "cancelAllNotifications" -> {
                     cancelAllNotifications()
                     result.success(true)
                 }
+                
                 "forceStopService" -> {
                     stopAlarmService()
                     result.success(true)
@@ -133,6 +153,7 @@ class MainActivity: FlutterActivity() {
 
                     result.success(isActive)
                 }
+                
                 "getAlarmLaunchData" -> {
                     val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
                     val fromAction = prefs.getBoolean("flutter.from_notification_action", false)
@@ -171,6 +192,17 @@ class MainActivity: FlutterActivity() {
                     }
 
                     result.success(data)
+                }
+                
+                "requestNotificationPermissions" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val permission = android.Manifest.permission.POST_NOTIFICATIONS
+                        if (ContextCompat.checkSelfPermission(this, permission) != 
+                                PackageManager.PERMISSION_GRANTED) {
+                            requestPermissions(arrayOf(permission), 100)
+                        }
+                    }
+                    result.success(true)
                 }
 
                 else -> result.notImplemented()
@@ -459,6 +491,9 @@ class MainActivity: FlutterActivity() {
             putExtra("nfcRequired", nfcRequired)
         }
 
+        // Add 1 second buffer to ensure the alarm triggers exactly on time, not early
+        val adjustedTriggerTime = triggerAtMillis + 1000
+
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
         val pendingIntent = android.app.PendingIntent.getBroadcast(
             this,
@@ -496,8 +531,8 @@ class MainActivity: FlutterActivity() {
             // Remove any existing entry for this alarm ID
             alarmsList.removeAll { it.startsWith("$alarmId:") }
 
-            // Add the new alarm
-            val alarmInfo = "$alarmId:$soundId:$triggerAtMillis:$nfcRequired"
+            // Add the new alarm - use the adjusted trigger time
+            val alarmInfo = "$alarmId:$soundId:$adjustedTriggerTime:$nfcRequired"
             alarmsList.add(alarmInfo)
 
             // Store as a simple comma-separated list
@@ -509,26 +544,26 @@ class MainActivity: FlutterActivity() {
             Log.e(TAG, "Error storing scheduled alarm", e)
         }
 
-        // Schedule the alarm
+        // Schedule the alarm with adjusted time
         try {
             when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms() -> {
                     // Use both methods for redundancy
-                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    alarmManager.setAlarmClock(android.app.AlarmManager.AlarmClockInfo(triggerAtMillis, pendingIntent), pendingIntent)
-                    Log.d(TAG, "Scheduled exact alarm with AlarmClock (Android 12+): ID=$alarmId, Time=$triggerAtMillis")
+                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
+                    alarmManager.setAlarmClock(android.app.AlarmManager.AlarmClockInfo(adjustedTriggerTime, pendingIntent), pendingIntent)
+                    Log.d(TAG, "Scheduled exact alarm with AlarmClock (Android 12+): ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
                 }
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    Log.d(TAG, "Scheduled exact alarm with setExactAndAllowWhileIdle: ID=$alarmId, Time=$triggerAtMillis")
+                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
+                    Log.d(TAG, "Scheduled exact alarm with setExactAndAllowWhileIdle: ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
                 }
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
-                    alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    Log.d(TAG, "Scheduled exact alarm with setExact: ID=$alarmId, Time=$triggerAtMillis")
+                    alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
+                    Log.d(TAG, "Scheduled exact alarm with setExact: ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
                 }
                 else -> {
-                    alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    Log.d(TAG, "Scheduled alarm with set: ID=$alarmId, Time=$triggerAtMillis")
+                    alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
+                    Log.d(TAG, "Scheduled alarm with set: ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
                 }
             }
         } catch (e: Exception) {

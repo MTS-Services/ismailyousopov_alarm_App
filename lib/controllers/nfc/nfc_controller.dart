@@ -33,8 +33,8 @@ class NFCController extends GetxController {
       hasNfcPermission.value = true; // Assume permissions are good if we got here
       
       if (!isNfcAvailable.value) {
-        Get.snackbar('NFC Status', 'NFC is not available on this device', 
-          snackPosition: SnackPosition.BOTTOM);
+        // Get.snackbar('NFC Status', 'NFC is not available on this device',
+        //   snackPosition: SnackPosition.BOTTOM);
       }
     } catch (e) {
       // Check if this is a permission error
@@ -139,14 +139,14 @@ class NFCController extends GetxController {
     }
 
     isScanning.value = true;
-    Get.snackbar('NFC', 'Starting NFC scan...', snackPosition: SnackPosition.BOTTOM);
+    // Get.snackbar('NFC', 'Starting NFC scan...', snackPosition: SnackPosition.BOTTOM);
 
     try {
       NfcManager.instance.startSession(
         onDiscovered: (NfcTag tag) async {
           final id = _getTagId(tag);
           lastScannedTag.value = id;
-          Get.snackbar('NFC', 'Tag detected: $id', snackPosition: SnackPosition.BOTTOM);
+          // Get.snackbar('NFC', 'Tag detected: $id', snackPosition: SnackPosition.BOTTOM);
           onTagDetected(id);
           await NfcManager.instance.stopSession();
           isScanning.value = false;

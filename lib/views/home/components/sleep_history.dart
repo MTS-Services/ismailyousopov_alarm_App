@@ -50,7 +50,7 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget>
   @override
   void dispose() {
     _tabController.dispose();
-    _animationController.dispose();
+    // _animationController.dispose();
     super.dispose();
   }
 

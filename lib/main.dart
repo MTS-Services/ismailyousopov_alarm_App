@@ -1,3 +1,4 @@
+import 'package:alarm/controllers/alarm/alarm_controller.dart';
 import 'package:alarm/core/services/background_service.dart';
 import 'package:alarm/views/home/components/alarm_edit.dart';
 import 'package:alarm/views/home/components/alarm_history.dart';
@@ -60,6 +61,13 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       title: AppConstants.appName,
       theme: AppTheme.lightTheme,
+      initialBinding: BindingsBuilder(
+        () {
+          Get.put(DatabaseHelper());
+          Get.put(AlarmBackgroundService());
+          Get.put(NotificationService());
+          Get.put(AlarmController());
+      }),
       initialRoute: hasCompletedOnboarding ? AppConstants.home : AppConstants.onboarding,
       getPages: [
         GetPage(

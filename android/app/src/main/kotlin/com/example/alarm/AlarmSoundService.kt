@@ -131,10 +131,10 @@ class AlarmSoundService : Service() {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Channel for alarm sound playback"
-                setSound(null, null) // No sound from notification
-                enableVibration(false) // No vibration from notification
                 enableLights(true)
                 lightColor = android.graphics.Color.RED
+                importance = NotificationManager.IMPORTANCE_HIGH
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -190,8 +190,16 @@ class AlarmSoundService : Service() {
             .setAutoCancel(false)
             .addAction(R.mipmap.ic_launcher, "Stop Alarm", stopPendingIntent)
             .setContentIntent(pendingIntent)
+            // Add these for better visibility
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setColorized(true)
+            .setColor(0xFFFF0000.toInt())
+            .setUsesChronometer(true)
+            .setOnlyAlertOnce(false)
 
-        return builder.build()
+        return builder.build().apply {
+            flags = flags or Notification.FLAG_INSISTENT or Notification.FLAG_NO_CLEAR
+        }
     }
 
     private fun acquireWakeLock() {

@@ -116,7 +116,8 @@ class AlarmManager {
         let content = UNMutableNotificationContent()
         content.title = "Alarm"
         content.body = nfcRequired ? "Scan NFC tag to stop alarm" : "Time to wake up!"
-        content.sound = .default
+        // Use default critical alarm sound
+        content.sound = UNNotificationSound.defaultCritical
         content.categoryIdentifier = "ALARM_CATEGORY"
         
         // Add user info for notification handling
@@ -125,6 +126,18 @@ class AlarmManager {
             "soundId": soundId,
             "nfcRequired": nfcRequired
         ]
+        
+        // Set high interruption level for critical notifications
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
+        
+        // Request critical alert permission if not already granted
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge, .criticalAlert]) { granted, error in
+            if let error = error {
+                print("Critical permission error: \(error)")
+            }
+        }
         
         // Create the request
         let request = UNNotificationRequest(

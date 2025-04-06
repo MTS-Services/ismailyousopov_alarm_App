@@ -242,14 +242,22 @@ class NotificationService {
         onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       );
 
+      // Clear existing notifications to avoid conflicts
+      await flutterLocalNotificationsPlugin.cancelAll();
+
+      // Create required notification channels with proper settings
+      await _createRequiredNotificationChannels();
+      
+      // Request all required permissions immediately
+      await _requestAllRequiredPermissions();
+      
       await _cleanupOldNotificationChannels();
-      await _ensureRequiredChannelsExist();
-      await requestPermissions();
       await requestBatteryOptimizationExemption();
       await setupNotificationTriggerListener();
       await _clearAllActiveAlarms();
       await checkAndRestoreAlarmsAfterReboot();
       await cleanupOldActivationTimestamps();
+      
       Timer.periodic(const Duration(hours: 1), (_) {
         clearStaleNotifications();
       });
@@ -257,10 +265,96 @@ class NotificationService {
       Timer.periodic(const Duration(hours: 12), (_) {
         cleanupOldActivationTimestamps();
       });
+      
+      // Schedule a health check to ensure permissions stay active
+      _schedulePermissionHealthChecks();
     } catch (e) {
       debugPrint('Notification service initialization error: $e');
       _scheduleRetryInitialization();
     }
+  }
+
+  /// Create all required notification channels with proper settings
+  static Future<void> _createRequiredNotificationChannels() async {
+    if (Platform.isAndroid) {
+      final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+              
+      if (androidPlugin != null) {
+        // Main alarm channel
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'alarm_channel',
+            'Alarm Notifications',
+            description: 'Used for alarm notifications',
+            importance: Importance.max,
+            enableVibration: true,
+            enableLights: true,
+            ledColor: Colors.red,
+            playSound: true,  // IMPORTANT: Enable sound
+            sound: null,  // Use default sound
+            showBadge: true,
+          ),
+        );
+        
+        // Foreground service channel
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'alarm_foreground_service',
+            'Alarm Service',
+            description: 'Used for running the alarm service',
+            importance: Importance.high,
+            enableVibration: true,
+            showBadge: true,
+          ),
+        );
+        
+        debugPrint('Created all required notification channels');
+      }
+    }
+  }
+  
+  /// Request all permissions needed for alarms to function
+  static Future<void> _requestAllRequiredPermissions() async {
+    if (Platform.isAndroid) {
+      await Permission.notification.request();
+      await Permission.scheduleExactAlarm.request();
+      await Permission.ignoreBatteryOptimizations.request();
+      
+      // Request notification permissions from platform plugin too
+      final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+              
+      if (androidPlugin != null) {
+        await androidPlugin.requestNotificationsPermission();
+        
+        // Also use method channel for additional permissions
+        try {
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('bringToForeground');
+        } catch (e) {
+          debugPrint('Error bringing app to foreground: $e');
+        }
+      }
+    } else if (Platform.isIOS) {
+      await Permission.notification.request();
+    }
+    
+    debugPrint('Requested all required permissions');
+  }
+  
+  /// Schedule regular checks of notification permissions
+  static void _schedulePermissionHealthChecks() {
+    Timer.periodic(const Duration(minutes: 30), (_) async {
+      final hasPermissions = await areNotificationsEnabled();
+      debugPrint('Permission health check: Notifications enabled = $hasPermissions');
+      
+      if (!hasPermissions) {
+        await _requestAllRequiredPermissions();
+      }
+    });
   }
 
   /// Schedule a retry for initialization if it fails

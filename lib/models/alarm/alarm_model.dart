@@ -85,7 +85,10 @@ class AlarmModel {
       time.minute,
     );
 
-    return now.difference(alarmTimeToday).inMinutes.abs() < 1;
+    // Changed condition to only consider alarm as ringing if we're at or past the alarm time
+    // but not more than 1 minute after it
+    final diff = now.difference(alarmTimeToday).inMinutes;
+    return diff >= 0 && diff < 1;
   }
 
   /// Determines if this alarm will trigger today

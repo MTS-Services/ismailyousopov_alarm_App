@@ -145,6 +145,9 @@ class AlarmBootReceiver : BroadcastReceiver() {
                                     putExtra("nfcRequired", nfcRequired)
                                 }
 
+                                // Add 1 second buffer to ensure alarm triggers exactly on time
+                                val adjustedScheduledTime = scheduledTime + 1000
+
                                 val pendingIntent = android.app.PendingIntent.getBroadcast(
                                     context,
                                     id,
@@ -152,12 +155,12 @@ class AlarmBootReceiver : BroadcastReceiver() {
                                     android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
 
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, scheduledTime, pendingIntent)
+                                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, adjustedScheduledTime, pendingIntent)
                                 } else {
-                                    alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, scheduledTime, pendingIntent)
+                                    alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, adjustedScheduledTime, pendingIntent)
                                 }
 
-                                Log.d(TAG, "Restored scheduled alarm: $id for time: $scheduledTime")
+                                Log.d(TAG, "Restored scheduled alarm: $id for time: $adjustedScheduledTime (original: $scheduledTime)")
                             }
                         }
                     }

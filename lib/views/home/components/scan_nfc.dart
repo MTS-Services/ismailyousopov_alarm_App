@@ -65,10 +65,10 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
     });
 
     if (!_nfcController.isNfcAvailable.value) {
-      setState(() {
-        _showError = true;
-        _errorMessage = 'NFC is not available on this device.';
-      });
+      // setState(() {
+      //   _showError = true;
+      //   _errorMessage = 'NFC is not available on this device.';
+      // });
       return;
     }
 
@@ -283,32 +283,32 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
                           ),
                         ),
                       
-                      if (_isAlreadyRegistered)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 20),
-                          child: ElevatedButton(
-                            onPressed: () {
-                              _nfcController.stopNfcScan();
-                              Get.back();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(25),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 30, vertical: 15),
-                            ),
-                            child: Text(
-                              'OK',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
+                      // if (_isAlreadyRegistered)
+                      //   Padding(
+                      //     padding: const EdgeInsets.only(top: 20),
+                      //     child: ElevatedButton(
+                      //       onPressed: () {
+                      //         _nfcController.stopNfcScan();
+                      //         Get.back();
+                      //       },
+                      //       style: ElevatedButton.styleFrom(
+                      //         backgroundColor: Colors.blue,
+                      //         shape: RoundedRectangleBorder(
+                      //           borderRadius: BorderRadius.circular(25),
+                      //         ),
+                      //         padding: const EdgeInsets.symmetric(
+                      //             horizontal: 30, vertical: 15),
+                      //       ),
+                      //       child: Text(
+                      //         'OK',
+                      //         style: GoogleFonts.inter(
+                      //           color: Colors.white,
+                      //           fontSize: 16,
+                      //           fontWeight: FontWeight.w600,
+                      //         ),
+                      //       ),
+                      //     ),
+                      //   ),
                     ],
                   ),
                 ),
