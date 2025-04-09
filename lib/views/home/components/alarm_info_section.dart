@@ -111,10 +111,7 @@ class AlarmInfoSection extends StatelessWidget {
   /// Builds the add alarm floating action button with animation
   Widget _buildAddAlarmButton(BuildContext context, Color primaryColor) {
     if (addButtonAnimation != null) {
-      return ScaleTransition(
-        scale: addButtonAnimation!,
-        child: _buildAddButton(context, primaryColor),
-      );
+      return _buildAddButton(context, primaryColor);
     } else {
       return _buildAddButton(context, primaryColor);
     }

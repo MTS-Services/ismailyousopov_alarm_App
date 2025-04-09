@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
+import 'package:alarm/alarm.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
 import '../../../controllers/nfc/nfc_controller.dart';
 import '../../../core/services/background_service.dart';
@@ -19,6 +20,21 @@ class AlarmStopScreen extends StatefulWidget {
 
   @override
   State<AlarmStopScreen> createState() => _AlarmStopWidgetState();
+
+  static AlarmStopScreen fromArguments(dynamic arguments) {
+    // Handle arguments whether they're passed as a map or directly
+    if (arguments is Map<String, dynamic>) {
+      return AlarmStopScreen(
+        alarmId: arguments['alarmId'] ?? 0,
+        soundId: arguments['soundId'] ?? 1,
+      );
+    } else if (arguments is int) {
+      return AlarmStopScreen(alarmId: arguments);
+    } else {
+      // Default fallback
+      return const AlarmStopScreen(alarmId: 0);
+    }
+  }
 }
 
 class _AlarmStopWidgetState extends State<AlarmStopScreen>
@@ -42,14 +58,27 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
     )..repeat();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Clean up any directToStop flags (we've already handled it by being here)
+      // Get the active alarm ID and sound ID from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('flutter.direct_to_stop');
+      final isOpenedFromNotification = prefs.getBool('flutter.direct_to_stop') ?? false;
       
+      // If opened from notification, use the stored active alarm ID and sound ID
+      int alarmId = widget.alarmId;
+      int soundId = widget.soundId;
+      
+      if (isOpenedFromNotification) {
+        alarmId = prefs.getInt('flutter.active_alarm_id') ?? alarmId;
+        soundId = prefs.getInt('flutter.active_alarm_sound') ?? soundId;
+        
+        // Clear the flag since we've handled it
+        await prefs.remove('flutter.direct_to_stop');
+      }
+      
+      // Ensure alarm is active
       await _ensureAlarmIsActive();
       
       // Get the alarm object to check if NFC is required
-      final alarm = _alarmController.getAlarmById(widget.alarmId);
+      final alarm = _alarmController.getAlarmById(alarmId);
       if (alarm != null) {
         nfcRequired.value = alarm.nfcRequired;
         if (alarm.nfcRequired) {
@@ -72,27 +101,27 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
 
   Future<void> _ensureAlarmIsActive() async {
     try {
-      // Check if this is from a direct stop intent first
+      // Get the active alarm ID and sound ID from SharedPreferences first
       final prefs = await SharedPreferences.getInstance();
-      final launchDirectToStop = prefs.getBool('flutter.direct_to_stop') ?? false;
       
-      // Set active alarm IDs even if coming from direct stop
-      await prefs.setInt('flutter.active_alarm_id', widget.alarmId);
-      await prefs.setInt('flutter.active_alarm_sound', widget.soundId);
+      // Set active alarm IDs - prefer stored values for consistency
+      final storedAlarmId = prefs.getInt('flutter.active_alarm_id') ?? widget.alarmId;
+      final storedSoundId = prefs.getInt('flutter.active_alarm_sound') ?? widget.soundId;
+      
+      // Always update with the most current values
+      await prefs.setInt('flutter.active_alarm_id', storedAlarmId);
+      await prefs.setInt('flutter.active_alarm_sound', storedSoundId);
       
       // Update the controller
-      _alarmController.activeAlarmId.value = widget.alarmId;
+      _alarmController.activeAlarmId.value = storedAlarmId;
       
       final isActive = await AlarmBackgroundService.isAlarmActive();
       if (!isActive) {
-        // If we're coming from a direct stop button, we might not need to start the alarm again
-        // since we just want to show the stop screen
-        if (!launchDirectToStop) {
-          await AlarmBackgroundService.forceStartAlarmIfNeeded(
-              widget.alarmId,
-              widget.soundId
-          );
-        }
+        // If alarm isn't active, start it
+        await AlarmBackgroundService.forceStartAlarmIfNeeded(
+            storedAlarmId,
+            storedSoundId
+        );
       }
     } catch (e) {
       debugPrint('Error ensuring alarm is active: $e');
@@ -102,7 +131,10 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
   /// Direct method to stop the alarm without NFC verification
   Future<void> _stopAlarm() async {
     try {
-      // First stop the background service to ensure native services are stopped
+      // First stop the alarm using the Alarm package
+      await Alarm.stop(widget.alarmId);
+      
+      // Then stop the background service to ensure native services are stopped
       await AlarmBackgroundService.stopAlarm();
       
       // Then stop the alarm sound in Flutter
@@ -149,7 +181,10 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
 
     if (success) {
       try {
-        // First stop the background service to ensure native services are stopped
+        // First stop the alarm using the Alarm package
+        await Alarm.stop(widget.alarmId);
+        
+        // Then stop the background service to ensure native services are stopped
         await AlarmBackgroundService.stopAlarm();
         
         // Then stop the alarm sound in Flutter
@@ -191,7 +226,10 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
 
     if (_nfcController.verifyBackupCode(code)) {
       try {
-        // First stop the background service to ensure native services are stopped
+        // First stop the alarm using the Alarm package
+        await Alarm.stop(widget.alarmId);
+        
+        // Then stop the background service to ensure native services are stopped
         await AlarmBackgroundService.stopAlarm();
         
         // Then stop the alarm sound in Flutter
@@ -260,7 +298,7 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'You can also find this key on our website\nwww.example.com',
+                  'You can also find this key on our website\nEARLYUPTAG.COM',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 12,
@@ -490,54 +528,75 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
                               } else {
                                 // Regular alarm stop UI with simple stop button
                                 return Container(
-                                  width: constraints.maxWidth * 0.8,
-                                  height: constraints.maxHeight * 0.4,
+                                  width: constraints.maxWidth * 0.6,
+                                  height: constraints.maxWidth * 0.6,
                                   constraints: const BoxConstraints(
-                                    maxWidth: 300,
-                                    maxHeight: 300,
+                                    maxWidth: 250,
+                                    maxHeight: 250,
                                     minWidth: 200,
                                     minHeight: 200,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        blurRadius: 8,
-                                        color: Colors.black.withOpacity(0.2),
-                                        offset: const Offset(0, 4),
-                                      )
-                                    ],
-                                    borderRadius: BorderRadius.circular(150),
-                                    border: Border.all(
-                                      color: Colors.red,
-                                      width: 8,
-                                    ),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(150),
-                                      onTap: _stopAlarm,
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.power_settings_new,
-                                            color: Colors.red,
-                                            size: isSmallScreen ? 80 : 100,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            'STOP',
-                                            style: GoogleFonts.inter(
-                                              color: Colors.red,
-                                              fontSize: isSmallScreen ? 22 : 28,
-                                              fontWeight: FontWeight.w800,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(32),
+                                          onTap: _stopAlarm,
+                                          child: Container(
+                                            width: constraints.maxWidth * 0.4,
+                                            height: constraints.maxWidth * 0.4,
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 220,
+                                              maxHeight: 220,
+                                              minWidth: 180,
+                                              minHeight: 180,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black,
+                                              borderRadius: const BorderRadius.only(
+                                                topLeft: Radius.circular(12),
+                                                topRight: Radius.circular(52),
+                                                bottomLeft: Radius.circular(52),
+                                                bottomRight: Radius.circular(52),
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  blurRadius: 8,
+                                                  color: Colors.black.withOpacity(0.2),
+                                                  offset: const Offset(0, 4),
+                                                )
+                                              ],
+                                            ),
+                                            child: Icon(
+                                              Icons.power_settings_new,
+                                              color: Colors.white,
+                                              size: isSmallScreen ? 60 : 80,
                                             ),
                                           ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
+                                      // const SizedBox(height: 16),
+                                      // Container(
+                                      //   padding: const EdgeInsets.symmetric(
+                                      //     horizontal: 20,
+                                      //     vertical: 8,
+                                      //   ),
+                                      //   decoration: BoxDecoration(
+                                      //     color: Colors.black,
+                                      //     borderRadius: BorderRadius.circular(30),
+                                      //   ),
+                                      //   child: Text(
+                                      //     'Tab the button to stop the alarm',
+                                      //     style: GoogleFonts.inter(
+                                      //       color: Colors.white,
+                                      //       fontSize: isSmallScreen ? 12 : 14,
+                                      //       fontWeight: FontWeight.w500,
+                                      //     ),
+                                      //   ),
+                                      // ),
+                                    ],
                                   ),
                                 );
                               }

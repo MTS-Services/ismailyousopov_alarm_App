@@ -197,7 +197,7 @@ class SleepStatisticsController extends GetxController {
 
       dayData[dateKey] = {
         'day': _getWeekdayName(date.weekday),
-        'timeRange': 'Set $formattedSleepTime / Off $formattedWakeTime',
+        'timeRange': 'Set $formattedSleepTime / Off $formattedWakeTime = ${_formatHoursMinutes(totalHours)}h',
         'date': date,
         'backgroundColor': date.day == DateTime.now().day
             ? Get.theme.primaryColor

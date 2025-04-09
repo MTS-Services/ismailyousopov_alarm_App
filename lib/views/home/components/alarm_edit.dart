@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:alarm/views/home/components/alarm_history.dart';
+import 'package:alarmapp/views/home/components/alarm_history.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -72,12 +72,10 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     if (alarm.id == null) return;
 
     try {
-
       final prefs = await SharedPreferences.getInstance();
       final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
 
       if (activeAlarmId == alarm.id) {
-
         await _alarmController.stopAlarm(alarm.id!);
 
         try {
@@ -88,20 +86,8 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
         }
       }
 
-      alarm.isEnabled = false;
-      await _databaseHelper.updateAlarm(alarm);
-
-      await NotificationService.cancelNotification(alarm.id!);
-
-      if (Platform.isAndroid) {
-        try {
-          await const MethodChannel('com.example.alarm/background_channel')
-              .invokeMethod('cancelExactAlarm', {'alarmId': alarm.id});
-          await AndroidAlarmManager.cancel(alarm.id!);
-        } catch (e) {
-          debugPrint('Error canceling exact alarm: $e');
-        }
-      }
+      // Use the updated cancelAlarm method that uses the Alarm package
+      await _alarmController.cancelAlarm(alarm);
 
       await _alarmController.loadAlarms();
 

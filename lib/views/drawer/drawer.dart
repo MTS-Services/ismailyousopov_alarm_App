@@ -1,4 +1,4 @@
-import 'package:alarm/views/onboarding/onboarding_screen.dart';
+import 'package:alarmapp/views/onboarding/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';

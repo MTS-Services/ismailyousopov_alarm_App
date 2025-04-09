@@ -1,4 +1,4 @@
-import 'package:alarm/core/constants/asset_constants.dart';
+import 'package:alarmapp/core/constants/asset_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/onboarding/onboarding_controller.dart';

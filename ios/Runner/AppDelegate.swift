@@ -120,14 +120,15 @@ import UserNotifications
       
       if call.method == "scheduleExactAlarm" {
         // Get parameters
-        guard let alarmId = call.arguments as? [String: Any]?["alarmId"] as? Int,
-              let triggerAtMillis = call.arguments as? [String: Any]?["triggerAtMillis"] as? Int64,
-              let soundId = call.arguments as? [String: Any]?["soundId"] as? Int else {
+        guard let args = call.arguments as? [String: Any],
+              let alarmId = args["alarmId"] as? Int,
+              let triggerAtMillis = args["triggerAtMillis"] as? Int64,
+              let soundId = args["soundId"] as? Int else {
           result(false)
           return
         }
         
-        let nfcRequired = (call.arguments as? [String: Any]?["nfcRequired"] as? Bool) ?? false
+        let nfcRequired = (args["nfcRequired"] as? Bool) ?? false
         
         // Schedule the notification
         let triggerDate = Date(timeIntervalSince1970: Double(triggerAtMillis) / 1000.0)

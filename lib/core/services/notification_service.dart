@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:alarm/core/constants/asset_constants.dart';
-import 'package:alarm/core/services/sound_manager.dart';
+import 'package:alarmapp/core/constants/asset_constants.dart';
+import 'package:alarmapp/core/services/sound_manager.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -814,15 +814,29 @@ class NotificationService {
         }
       }
 
+      // Mark this alarm as active in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('flutter.active_alarm_id', alarmId);
+      await prefs.setInt('flutter.active_alarm_sound', soundId);
+      await prefs.setBool('flutter.direct_to_stop', true);
+
       Future.delayed(const Duration(milliseconds: 300), () {
         try {
-          // Always navigate to stop alarm screen, regardless of NFC
-          Get.toNamed(
+          // Navigate to the stop alarm screen
+          Get.offAllNamed(
             AppConstants.stopAlarm,
             arguments: {'alarmId': alarmId, 'soundId': soundId},
           );
         } catch (e) {
           debugPrint('Error navigating to alarm screen: $e');
+          // Fallback navigation
+          Get.offAllNamed(AppConstants.home);
+          Future.delayed(const Duration(milliseconds: 200), () {
+            Get.toNamed(
+              AppConstants.stopAlarm,
+              arguments: {'alarmId': alarmId, 'soundId': soundId},
+            );
+          });
         }
       });
     } catch (e) {
@@ -830,12 +844,18 @@ class NotificationService {
       // Try fallback approach
       try {
         await _startAlarmSoundService(alarmId, soundId);
-      } catch (_) {}
+        // Still attempt to navigate to stop screen
+        Get.offAllNamed(
+          AppConstants.stopAlarm,
+          arguments: {'alarmId': alarmId, 'soundId': soundId},
+        );
+      } catch (err) {
+        debugPrint('Fallback navigation also failed: $err');
+      }
     }
   }
 
   /// Handles background notification tap events with improved reliability
-  @pragma('vm:entry-point')
   @pragma('vm:entry-point')
   static void notificationTapBackground(
       NotificationResponse notificationResponse) {
@@ -850,11 +870,18 @@ class NotificationService {
           final int soundId =
               payloadParts.length > 1 ? int.tryParse(payloadParts[1]) ?? 1 : 1;
 
-          if (actionId == stopActionId) {
-            AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
-          } else {
-            AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
-          }
+          // Use SharedPreferences to store information for app launch
+          SharedPreferences.getInstance().then((prefs) {
+            prefs.setInt('flutter.active_alarm_id', alarmId);
+            prefs.setInt('flutter.active_alarm_sound', soundId);
+            prefs.setBool('flutter.direct_to_stop', true);
+            
+            if (actionId == stopActionId) {
+              AlarmBackgroundService.stopAlarm();
+            } else {
+              AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
+            }
+          });
         }
       }
     } catch (e) {

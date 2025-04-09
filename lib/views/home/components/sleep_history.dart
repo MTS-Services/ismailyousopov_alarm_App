@@ -190,7 +190,7 @@ class SleepHistoryWidgetState extends State<SleepHistoryWidget>
               Align(
                 alignment: Alignment.topCenter,
                 child: Text(
-                  'Total hours slept',
+                  'Total hours slept this week',
                   style: GoogleFonts.outfit(
                     color: Colors.black,
                     fontSize: MediaQuery.of(context).size.width * 0.03,

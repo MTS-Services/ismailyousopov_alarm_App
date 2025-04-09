@@ -238,7 +238,7 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
                           ),
                           child: Center(
                             child: Padding(
-                              padding: const EdgeInsets.only(right: 5),
+                              padding: const EdgeInsets.only(right: 15, left: 5, top: 5, bottom: 5),
                               child: Text(
                                 _showError
                                     ? _errorMessage
@@ -250,7 +250,7 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   color:
-                                      _showError ? Colors.white : Colors.amber,
+                                      Colors.white,
                                   fontSize: 15,
                                 ),
                               ),

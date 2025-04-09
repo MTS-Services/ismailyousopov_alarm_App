@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:io';
+import 'package:alarm/model/volume_settings.dart';
+import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -8,6 +11,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:get/get.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:alarm/alarm.dart';
 import '../../core/database/database_helper.dart';
 import '../../core/services/background_service.dart';
 import '../../models/alarm/alarm_model.dart';
@@ -59,48 +63,212 @@ class AlarmController extends GetxController {
       _checkForActiveAlarms();
       verifyAlarmStates();
     });
+    
+    // Listen for ringing alarms from the Alarm package
+    Alarm.ringing.listen((AlarmSet alarmSet) {
+      for (final alarm in alarmSet.alarms) {
+        debugPrint('Alarm ringing from Alarm package: ${alarm.id}');
+        _handleAlarmPackageRinging(alarm.id);
+      }
+    });
   }
 
-
-  /// Checks for alarms that should be ringing but aren't
-  Future<void> verifyAlarmStates() async {
+  /// Handle alarm ringing from the Alarm package
+  Future<void> _handleAlarmPackageRinging(int packageAlarmId) async {
     try {
-      final now = DateTime.now();
-      final prefs = await SharedPreferences.getInstance();
-
-      // Check each enabled alarm
-      for (final alarm in alarms.where((a) => a.isEnabled)) {
-        // If alarm should be ringing based on its time
-        if (alarm.isRinging(now) && alarm.id != null) {
-          // But our active alarm ID doesn't match
-          if (activeAlarmId.value != alarm.id) {
-            // Check when this alarm was last activated
-            final lastActivated = prefs.getInt('alarm_last_activated_${alarm.id}') ?? 0;
-            final timeSinceActivation = now.millisecondsSinceEpoch - lastActivated;
-
-            // Only trigger if it hasn't been activated in the last 30 seconds
-            if (timeSinceActivation > 30000) {
-              debugPrint('Found alarm ${alarm.id} that should be ringing but isn\'t active');
-
-              // Start the alarm
-              await playAlarmSound(alarm.soundId, alarmId: alarm.id);
-
-              // Only show notification if the sound playback was successful (not deduplicated)
-              if (activeAlarmId.value == alarm.id) {
-                await NotificationService.showFallbackAlarmNotification(alarm.id!, alarm.soundId);
-              }
-            } else {
-              debugPrint('Alarm ${alarm.id} was recently activated, skipping duplicate trigger');
-            }
-          }
-        }
+      // Find the corresponding alarm in our system
+      final alarm = getAlarmById(packageAlarmId);
+      if (alarm != null) {
+        activeAlarmId.value = packageAlarmId;
+        shouldShowStopScreen.value = true;
+        hasActiveAlarm.value = true;
+        
+        // Store active alarm info
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('flutter.active_alarm_id', packageAlarmId);
+        await prefs.setInt('flutter.active_alarm_sound', alarm.soundId);
+        
+        // Ensure device stays awake
+        _enableAlarmWakeLock();
       }
     } catch (e) {
-      debugPrint('Error verifying alarm states: $e');
+      debugPrint('Error handling alarm package ringing: $e');
+    }
+  }
+  
+  /// Convert our AlarmModel to Alarm package's AlarmSettings
+  AlarmSettings _convertToAlarmSettings(AlarmModel alarm) {
+    // Get the proper sound path for the alarm
+    final soundPath = 'assets/${SoundManager.getSoundPath(alarm.soundId)}';
+    
+    return AlarmSettings(
+      id: alarm.id ?? DateTime.now().millisecondsSinceEpoch,
+      dateTime: alarm.getNextAlarmTime(),
+      assetAudioPath: soundPath,
+      loopAudio: true,
+      vibrate: true,
+      warningNotificationOnKill: Platform.isIOS,
+      androidFullScreenIntent: true,
+      volumeSettings: VolumeSettings.fade(
+        volume: currentAlarmVolume.value / 100,
+        fadeDuration: const Duration(seconds: 30),
+        volumeEnforced: true,
+      ),
+      notificationSettings: NotificationSettings(
+        title: 'Alarm',
+        body: alarm.nfcRequired ? 'Scan NFC Tag to Stop Alarm' : 'Tap to Stop Alarm',
+        // stopButton: 'Stop',
+      ),
+      payload: alarm.nfcRequired ? 'nfc_required:true' : 'nfc_required:false'
+    );
+  }
+
+  /// Creates a new alarm and schedules it using the Alarm package
+  Future<void> createAlarm(AlarmModel alarm) async {
+    try {
+      final DateTime now = DateTime.now();
+      if (!alarm.isRepeating && alarm.time.isBefore(now)) {
+        alarm.time = alarm.time.add(const Duration(days: 1));
+        debugPrint('Adjusted alarm time to: ${alarm.time}');
+      }
+
+      // Save to database first
+      final id = await _dbHelper.insertAlarm(alarm);
+      alarm.id = id;
+      await recordAlarmSetTime(alarm);
+      
+      if (alarm.isEnabled) {
+        // Convert and set with the Alarm package
+        final alarmSettings = _convertToAlarmSettings(alarm);
+        await Alarm.set(alarmSettings: alarmSettings);
+      }
+
+      await loadAlarms();
+      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+      await _prefs.setInt('last_alarm_id', id);
+
+      debugPrint(
+          'Created new alarm with ID: $id, time: ${alarm.time}, next trigger: ${alarm.getNextAlarmTime()}');
+      update();
+    } catch (e) {
+      debugPrint('Alarm creation failed: $e');
+      rethrow;
     }
   }
 
+  /// Updates an existing alarm's properties and reschedules it
+  Future<void> updateAlarm(AlarmModel alarm) async {
+    try {
+      if (alarm.id == null) {
+        throw Exception('Cannot update alarm without an ID');
+      }
 
+      await _dbHelper.updateAlarm(alarm);
+      
+      // Cancel the old alarm
+      await Alarm.stop(alarm.id!);
+
+      if (alarm.isEnabled) {
+        // Set the updated alarm with the Alarm package
+        final alarmSettings = _convertToAlarmSettings(alarm);
+        await Alarm.set(alarmSettings: alarmSettings);
+      }
+
+      await loadAlarms();
+      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+      update();
+    } catch (e) {
+      debugPrint('Error updating alarm: $e');
+    }
+  }
+
+  /// Deletes an alarm and cancels it
+  Future<void> deleteAlarm(int id) async {
+    try {
+      await Alarm.stop(id);
+      await _dbHelper.deleteAlarm(id);
+      await loadAlarms();
+      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+      update();
+    } catch (e) {
+      debugPrint('Error deleting alarm: $e');
+    }
+  }
+
+  /// Disables an alarm without deleting it from the database
+  Future<void> cancelAlarm(AlarmModel alarm) async {
+    if (alarm.id == null) return;
+
+    try {
+      alarm.isEnabled = false;
+      await _dbHelper.updateAlarm(alarm);
+      await Alarm.stop(alarm.id!);
+      await loadAlarms();
+      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+      update();
+    } catch (e) {
+      debugPrint('Error canceling alarm: $e');
+    }
+  }
+
+  /// Stops the alarm sound and updates the alarm state
+  Future<void> stopAlarmAndUpdateState(AlarmModel alarm) async {
+    try {
+      if (alarm.id != null) {
+        await Alarm.stop(alarm.id!);
+      }
+      
+      stopAlarmSound();
+      await AlarmBackgroundService.stopAlarm();
+      try {
+        await WakelockPlus.disable();
+      } catch (e) {
+        debugPrint('Error disabling wakelock: $e');
+      }
+
+      if (!alarm.isRepeating) {
+        alarm.isEnabled = false;
+        await _dbHelper.updateAlarm(alarm);
+      }
+
+      await recordAlarmStopTime(alarm);
+
+      if (alarm.isRepeating && alarm.isEnabled) {
+        final alarmSettings = _convertToAlarmSettings(alarm);
+        await Alarm.set(alarmSettings: alarmSettings);
+      }
+
+      await loadAlarms();
+      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+      update();
+    } catch (e) {
+      debugPrint('Error stopping alarm and updating state: $e');
+      await AlarmBackgroundService.forceStopService();
+    }
+  }
+
+  /// Stop alarm
+  Future<void> stopAlarm(int alarmId, {int soundId = 1}) async {
+    try {
+      final alarm = getAlarmById(alarmId);
+      if (alarm == null) {
+        debugPrint('Cannot stop alarm: Alarm with ID $alarmId not found');
+        return;
+      }
+
+      await stopAlarmAndUpdateState(alarm);
+      
+      // If we need to stop using the Alarm package directly
+      await Alarm.stop(alarmId);
+
+      final nfcController = Get.put(NFCController());
+      nfcController.verificationSuccess.value = true;
+
+      debugPrint('Alarm $alarmId stopped successfully');
+    } catch (e) {
+      debugPrint('Error stopping alarm: $e');
+    }
+  }
 
   /// Snooze the current alarm
   Future<void> snoozeAlarm(int alarmId, {int snoozeMinutes = 5}) async {
@@ -141,7 +309,43 @@ class AlarmController extends GetxController {
     }
   }
 
+  /// Checks for alarms that should be ringing but aren't
+  Future<void> verifyAlarmStates() async {
+    try {
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
 
+      // Check each enabled alarm
+      for (final alarm in alarms.where((a) => a.isEnabled)) {
+        // If alarm should be ringing based on its time
+        if (alarm.isRinging(now) && alarm.id != null) {
+          // But our active alarm ID doesn't match
+          if (activeAlarmId.value != alarm.id) {
+            // Check when this alarm was last activated
+            final lastActivated = prefs.getInt('alarm_last_activated_${alarm.id}') ?? 0;
+            final timeSinceActivation = now.millisecondsSinceEpoch - lastActivated;
+
+            // Only trigger if it hasn't been activated in the last 30 seconds
+            if (timeSinceActivation > 30000) {
+              debugPrint('Found alarm ${alarm.id} that should be ringing but isn\'t active');
+
+              // Start the alarm
+              await playAlarmSound(alarm.soundId, alarmId: alarm.id);
+
+              // Only show notification if the sound playback was successful (not deduplicated)
+              if (activeAlarmId.value == alarm.id) {
+                await NotificationService.showFallbackAlarmNotification(alarm.id!, alarm.soundId);
+              }
+            } else {
+              debugPrint('Alarm ${alarm.id} was recently activated, skipping duplicate trigger');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error verifying alarm states: $e');
+    }
+  }
 
   /// Load saved volume from shared preferences
   Future<void> _loadSavedVolume() async {
@@ -229,106 +433,6 @@ class AlarmController extends GetxController {
     }
   }
 
-  /// Creates a new alarm and schedules its notification
-  Future<void> createAlarm(AlarmModel alarm) async {
-    try {
-      final DateTime now = DateTime.now();
-      if (!alarm.isRepeating && alarm.time.isBefore(now)) {
-        alarm.time = alarm.time.add(const Duration(days: 1));
-        debugPrint('Adjusted alarm time to: ${alarm.time}');
-      }
-
-      DateTime nextAlarmTime = alarm.getNextAlarmTime();
-      final id = await _dbHelper.insertAlarm(alarm);
-      alarm.id = id;
-      await recordAlarmSetTime(alarm);
-      if (alarm.isEnabled) {
-        await NotificationService.scheduleAlarmNotification(
-          id: alarm.id!,
-          scheduledTime: nextAlarmTime,
-          soundId: alarm.soundId,
-          nfcRequired: alarm.nfcRequired,
-          title: 'Alarm',
-          body: alarm.nfcRequired
-              ? 'Scan NFC Tag to Stop Alarm'
-              : 'Tap to Stop Alarm',
-        );
-      }
-
-      await loadAlarms();
-      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      await _prefs.setInt('last_alarm_id', id);
-
-      debugPrint(
-          'Created new alarm with ID: $id, time: ${alarm.time}, next trigger: $nextAlarmTime');
-      update();
-    } catch (e) {
-      debugPrint('Alarm creation failed: $e');
-      rethrow;
-    }
-  }
-
-  /// Updates an existing alarm's properties and reschedules its notification
-  Future<void> updateAlarm(AlarmModel alarm) async {
-    try {
-      if (alarm.id == null) {
-        throw Exception('Cannot update alarm without an ID');
-      }
-
-      await _dbHelper.updateAlarm(alarm);
-      await NotificationService.cancelNotification(alarm.id!);
-
-      if (alarm.isEnabled) {
-        DateTime nextTriggerTime = alarm.getNextAlarmTime();
-        await NotificationService.scheduleAlarmNotification(
-          id: alarm.id!,
-          scheduledTime: nextTriggerTime,
-          soundId: alarm.soundId,
-          nfcRequired: alarm.nfcRequired,
-          title: 'Alarm',
-          body: alarm.nfcRequired
-              ? 'Scan NFC Tag to Stop Alarm'
-              : 'Tap to Stop Alarm',
-        );
-      }
-
-      await loadAlarms();
-      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      update();
-    } catch (e) {
-      debugPrint('Error updating alarm: $e');
-    }
-  }
-
-  /// Deletes an alarm and cancels its associated notification
-  Future<void> deleteAlarm(int id) async {
-    try {
-      await NotificationService.cancelNotification(id);
-      await _dbHelper.deleteAlarm(id);
-      await loadAlarms();
-      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      update();
-    } catch (e) {
-      debugPrint('Error deleting alarm: $e');
-    }
-  }
-
-  /// Disables an alarm without deleting it from the database
-  Future<void> cancelAlarm(AlarmModel alarm) async {
-    if (alarm.id == null) return;
-
-    try {
-      alarm.isEnabled = false;
-      await _dbHelper.updateAlarm(alarm);
-      await NotificationService.cancelNotification(alarm.id!);
-      await loadAlarms();
-      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      update();
-    } catch (e) {
-      debugPrint('Error canceling alarm: $e');
-    }
-  }
-
   /// Plays the selected alarm sound, either as a preview or full alarm
   Future<void> playAlarmSound(int soundId, {bool isPreview = false, int? alarmId}) async {
     try {
@@ -388,7 +492,6 @@ class AlarmController extends GetxController {
     }
   }
 
-
   /// Increase volume
   void _increaseAlarmVolumeGradually() {
     try {
@@ -418,7 +521,6 @@ class AlarmController extends GetxController {
       });
     }
   }
-
 
   /// Stops any currently playing alarm sound
   void stopAlarmSound() {
@@ -490,53 +592,6 @@ class AlarmController extends GetxController {
       return false;
     }
   }
-
-
-  /// Stops the alarm sound and updates the alarm state
-  Future<void> stopAlarmAndUpdateState(AlarmModel alarm) async {
-    try {
-      stopAlarmSound();
-      await AlarmBackgroundService.stopAlarm();
-      try {
-        await WakelockPlus.disable();
-      } catch (e) {
-        debugPrint('Error disabling wakelock: $e');
-      }
-
-      if (!alarm.isRepeating) {
-        alarm.isEnabled = false;
-        await _dbHelper.updateAlarm(alarm);
-      }
-
-      await recordAlarmStopTime(alarm);
-
-      if (alarm.id != null) {
-        await NotificationService.cancelNotification(alarm.id!);
-      }
-
-      if (alarm.isRepeating && alarm.isEnabled) {
-        DateTime nextTriggerTime = alarm.getNextAlarmTime();
-        await NotificationService.scheduleAlarmNotification(
-          id: alarm.id!,
-          scheduledTime: nextTriggerTime,
-          soundId: alarm.soundId,
-          nfcRequired: alarm.nfcRequired,
-          title: 'Alarm',
-          body: alarm.nfcRequired
-              ? 'Scan NFC Tag to Stop Alarm'
-              : 'Tap to Stop Alarm',
-        );
-      }
-
-      await loadAlarms();
-      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      update();
-    } catch (e) {
-      debugPrint('Error stopping alarm and updating state: $e');
-      await AlarmBackgroundService.forceStopService();
-    }
-  }
-
 
   /// Forces a refresh of the UI and alarm data
   void forceRefreshUI() {
@@ -710,34 +765,6 @@ class AlarmController extends GetxController {
     }
   }
 
-  /// stop alarm
-  Future<void> stopAlarm(int alarmId, {int soundId = 1}) async {
-    try {
-      final alarm = getAlarmById(alarmId);
-      if (alarm == null) {
-        debugPrint('Cannot stop alarm: Alarm with ID $alarmId not found');
-        return;
-      }
-
-      await stopAlarmAndUpdateState(alarm);
-
-      final nfcController = Get.put(NFCController());
-      nfcController.verificationSuccess.value = true;
-
-      debugPrint('Alarm $alarmId stopped successfully');
-    } catch (e) {
-      debugPrint('Error stopping alarm: $e');
-    }
-  }
-
-  @override
-  void onClose() {
-    _refreshTimer?.cancel();
-    _clockTimer?.cancel();
-    _audioPlayer.dispose();
-    super.onClose();
-  }
-
   /// Check for active alarms and update the hasActiveAlarm value
   /// Also updates shouldShowStopScreen to indicate if the stop alarm screen should be shown
   Future<void> _checkForActiveAlarms() async {
@@ -778,6 +805,15 @@ class AlarmController extends GetxController {
       debugPrint('Error checking for active alarms: $e');
     }
   }
+
+  @override
+  void onClose() {
+    _refreshTimer?.cancel();
+    _clockTimer?.cancel();
+    _audioPlayer.dispose();
+    super.onClose();
+  }
 }
+
 
 
