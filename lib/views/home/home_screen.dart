@@ -33,9 +33,23 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await alarmController.loadAlarms();
       _setupPeriodicRefresh();
+
+      // Initialize background service only if needed
+      final prefs = await SharedPreferences.getInstance();
+      final launchData = await AlarmBackgroundService.getAlarmLaunchData();
+      final hasLaunchIntent =
+          launchData != null && launchData['fromAlarm'] == true;
+
+      // Only initialize if we have an alarm launch intent or active alarm
+      if (hasLaunchIntent) {
+        // Safely initialize service only when needed
+        await AlarmBackgroundService.initializeService();
+        await AlarmBackgroundService.initializeOnAppStart();
+      }
+
       await _checkForActiveAlarm();
       await _checkAlarmLaunchIntent();
-      
+
       // Add a listener to detect active alarms while the app is open
       _setupActiveAlarmListener();
     });
@@ -49,20 +63,22 @@ class _HomeScreenState extends State<HomeScreen> {
         final int alarmId = launchData['alarmId'] ?? 0;
         final int soundId = launchData['soundId'] ?? 1;
         final bool directToStop = launchData['directToStop'] ?? false;
-        
-        debugPrint('App launched with alarm data: alarmId=$alarmId, directToStop=$directToStop');
-        
+
+        debugPrint(
+            'App launched with alarm data: alarmId=$alarmId, directToStop=$directToStop');
+
         if (alarmId > 0) {
           // Handle direct stop button case - go straight to stop screen without starting alarm
           if (directToStop) {
             // Clear the directToStop flag after handling it
             final prefs = await SharedPreferences.getInstance();
             await prefs.remove('flutter.direct_to_stop');
-            
+
             _navigateToStopAlarmScreen(alarmId, soundId);
           } else {
             // Normal case: start the alarm and then navigate to stop screen
-            await AlarmBackgroundService.forceStartAlarmIfNeeded(alarmId, soundId);
+            await AlarmBackgroundService.forceStartAlarmIfNeeded(
+                alarmId, soundId);
             _navigateToStopAlarmScreen(alarmId, soundId);
           }
         }
@@ -71,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('Error checking alarm launch intent: $e');
     }
   }
-  
+
   /// Checks if there's an active alarm that requires the stop screen
   Future<void> _checkForActiveAlarm() async {
     try {
@@ -80,13 +96,13 @@ class _HomeScreenState extends State<HomeScreen> {
         final prefs = await SharedPreferences.getInstance();
         final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
         final activeSoundId = prefs.getInt('flutter.active_alarm_sound') ?? 1;
-        
+
         if (activeAlarmId != null && activeAlarmId > 0) {
           // Check if we're already on the stop alarm screen or NFC scan screen
           final currentRoute = Get.currentRoute;
           final isOnStopScreen = currentRoute.contains(AppConstants.stopAlarm);
           final isOnNfcScreen = currentRoute.contains(AppConstants.nfcScan);
-          
+
           if (!isOnStopScreen && !isOnNfcScreen) {
             _navigateToStopAlarmScreen(activeAlarmId, activeSoundId);
           }
@@ -96,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('Error checking for active alarm: $e');
     }
   }
-  
+
   /// Navigates to the appropriate stop alarm screen
   void _navigateToStopAlarmScreen(int alarmId, int soundId) {
     // Always navigate to the stop alarm screen, regardless of NFC requirement
@@ -114,27 +130,27 @@ class _HomeScreenState extends State<HomeScreen> {
         final prefs = await SharedPreferences.getInstance();
         final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
         final activeSoundId = prefs.getInt('flutter.active_alarm_sound') ?? 1;
-        
+
         if (activeAlarmId != null && activeAlarmId > 0) {
           // Only navigate if we're not already on the stop alarm screen
-          if (!Get.currentRoute.contains(AppConstants.stopAlarm) && 
+          if (!Get.currentRoute.contains(AppConstants.stopAlarm) &&
               !Get.currentRoute.contains(AppConstants.nfcScan)) {
             _navigateToStopAlarmScreen(activeAlarmId, activeSoundId);
           }
         }
       }
     });
-    
+
     // Add a listener for the shouldShowStopScreen value
     ever(alarmController.shouldShowStopScreen, (shouldShow) async {
       if (shouldShow) {
         final activeAlarmId = alarmController.activeAlarmId.value;
         final prefs = await SharedPreferences.getInstance();
         final activeSoundId = prefs.getInt('flutter.active_alarm_sound') ?? 1;
-        
+
         if (activeAlarmId > 0) {
           // Only navigate if we're not already on the stop alarm screen
-          if (!Get.currentRoute.contains(AppConstants.stopAlarm) && 
+          if (!Get.currentRoute.contains(AppConstants.stopAlarm) &&
               !Get.currentRoute.contains(AppConstants.nfcScan)) {
             _navigateToStopAlarmScreen(activeAlarmId, activeSoundId);
           }

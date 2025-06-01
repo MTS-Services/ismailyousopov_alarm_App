@@ -507,21 +507,29 @@ class AlarmReceiver : BroadcastReceiver() {
     private fun loadVolumeSetting(context: Context): Float {
         try {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val savedVolume = prefs.getInt("flutter.alarm_volume", -1)
             
-            if (savedVolume != -1) {
+            // Try to get volume from different sources in order of preference
+            var volumePercentage = -1
+            
+            // First try the standard alarm_volume key
+            volumePercentage = prefs.getInt("flutter.alarm_volume", -1)
+            if (volumePercentage == -1) {
+                volumePercentage = prefs.getInt("alarm_volume", -1)
+            }
+            
+            if (volumePercentage != -1) {
                 // Convert from percentage (0-100) to float (0.0-1.0)
-                val volume = savedVolume / 100.0f
-                Log.d(TAG, "Loaded volume setting from preferences: $savedVolume% ($volume)")
+                val volume = (volumePercentage / 100.0f).coerceIn(0.1f, 1.0f) // Minimum 10%
+                Log.d(TAG, "Loaded volume setting from preferences: $volumePercentage% -> $volume")
                 return volume
             } else {
-                // Default volume if not set
-                Log.d(TAG, "Using default volume: 0.7")
-                return 0.7f
+                // Default volume if not set - use 80% for good audibility
+                Log.d(TAG, "No volume setting found, using default: 0.8 (80%)")
+                return 0.8f
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading volume setting, using default", e)
-            return 0.7f
+            return 0.8f
         }
     }
 

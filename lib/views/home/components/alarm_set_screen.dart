@@ -27,7 +27,6 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
   bool _isEditing = false;
   final NFCController nfcController = Get.put(NFCController());
 
-
   @override
   void initState() {
     super.initState();
@@ -92,7 +91,6 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
 
   void _handleNfcSwitch(bool value) async {
     if (value) {
-
       if (!nfcController.isNfcAvailable.value) {
         Get.snackbar(
           'NFC Not Available',
@@ -126,11 +124,10 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
       if (shouldRegister != true) {
         // User declined to register tag, so don't enable NFC
         return;
-      } else if(shouldRegister == true) {
+      } else if (shouldRegister == true) {
         int tempAlarmId = DateTime.now().millisecondsSinceEpoch;
         Get.to(() => AddNFCWidget(alarmId: tempAlarmId));
       }
-
 
       // If the result is true, a tag was registered successfully
       // if (result == true) {
@@ -258,47 +255,27 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                                   squeeze: 1.2,
                                   useMagnifier: true,
                                   itemExtent: 40,
-                                  looping: MediaQuery.of(context)
-                                          .alwaysUse24HourFormat
-                                      ? false
-                                      : true,
+                                  looping: false,
                                   onSelectedItemChanged: (int index) {
                                     setState(() {
                                       _selectedDateTime = DateTime(
                                         _selectedDateTime.year,
                                         _selectedDateTime.month,
                                         _selectedDateTime.day,
-                                        MediaQuery.of(context)
-                                                .alwaysUse24HourFormat
-                                            ? index
-                                            : (index % 12) +
-                                                (_selectedDateTime.hour >= 12
-                                                    ? 12
-                                                    : 0),
+                                        index,
                                         _selectedDateTime.minute,
                                       );
                                     });
                                   },
                                   scrollController: FixedExtentScrollController(
-                                    initialItem: MediaQuery.of(context)
-                                            .alwaysUse24HourFormat
-                                        ? _selectedDateTime.hour
-                                        : (_selectedDateTime.hour % 12 == 0
-                                            ? 0
-                                            : _selectedDateTime.hour % 12),
+                                    initialItem: _selectedDateTime.hour,
                                   ),
                                   children: List<Widget>.generate(
-                                    MediaQuery.of(context).alwaysUse24HourFormat
-                                        ? 24
-                                        : 12,
+                                    24,
                                     (int index) {
-                                      final hour = MediaQuery.of(context)
-                                              .alwaysUse24HourFormat
-                                          ? index
-                                          : (index == 0 ? 12 : index);
                                       return Center(
                                         child: Text(
-                                          hour.toString().padLeft(2, '0'),
+                                          index.toString().padLeft(2, '0'),
                                           style: const TextStyle(
                                             fontSize: 24,
                                             fontWeight: FontWeight.w500,
@@ -360,57 +337,6 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                                   ),
                                 ),
                               ),
-                              if (!MediaQuery.of(context).alwaysUse24HourFormat)
-                                SizedBox(
-                                  width: 60,
-                                  child: CupertinoPicker(
-                                    magnification: 1.2,
-                                    squeeze: 1.2,
-                                    useMagnifier: true,
-                                    itemExtent: 40,
-                                    onSelectedItemChanged: (int index) {
-                                      setState(() {
-                                        final newHour = index == 0
-                                            ? _selectedDateTime.hour % 12
-                                            : _selectedDateTime.hour % 12 + 12;
-                                        _selectedDateTime = DateTime(
-                                          _selectedDateTime.year,
-                                          _selectedDateTime.month,
-                                          _selectedDateTime.day,
-                                          newHour,
-                                          _selectedDateTime.minute,
-                                        );
-                                      });
-                                    },
-                                    scrollController:
-                                        FixedExtentScrollController(
-                                      initialItem:
-                                          _selectedDateTime.hour >= 12 ? 1 : 0,
-                                    ),
-                                    children: const [
-                                      Center(
-                                        child: Text(
-                                          "AM",
-                                          style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                      Center(
-                                        child: Text(
-                                          "PM",
-                                          style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -520,7 +446,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                             ],
                           ),
                         ),
-                        
+
                         // Volume Control
                         const SizedBox(height: 20),
                         Column(
@@ -537,13 +463,13 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                                   ),
                                 ),
                                 Obx(() => Text(
-                                  '${_alarmController.currentAlarmVolume.value}%',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black,
-                                  ),
-                                )),
+                                      '${_alarmController.currentAlarmVolume.value}%',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.black,
+                                      ),
+                                    )),
                               ],
                             ),
                             const SizedBox(height: 10),
@@ -562,24 +488,28 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                                 ),
                                 Expanded(
                                   child: Obx(() => SliderTheme(
-                                    data: SliderThemeData(
-                                      thumbColor: Colors.black,
-                                      activeTrackColor: Colors.black,
-                                      inactiveTrackColor: Colors.grey[300],
-                                      trackHeight: 4.0,
-                                      thumbShape: const RoundSliderThumbShape(
-                                        enabledThumbRadius: 8.0,
-                                      ),
-                                    ),
-                                    child: Slider(
-                                      value: _alarmController.currentAlarmVolume.value.toDouble(),
-                                      min: 0,
-                                      max: 100,
-                                      onChanged: (value) {
-                                        _alarmController.updateAlarmVolume(value.round());
-                                      },
-                                    ),
-                                  )),
+                                        data: SliderThemeData(
+                                          thumbColor: Colors.black,
+                                          activeTrackColor: Colors.black,
+                                          inactiveTrackColor: Colors.grey[300],
+                                          trackHeight: 4.0,
+                                          thumbShape:
+                                              const RoundSliderThumbShape(
+                                            enabledThumbRadius: 8.0,
+                                          ),
+                                        ),
+                                        child: Slider(
+                                          value: _alarmController
+                                              .currentAlarmVolume.value
+                                              .toDouble(),
+                                          min: 0,
+                                          max: 100,
+                                          onChanged: (value) {
+                                            _alarmController.updateAlarmVolume(
+                                                value.round());
+                                          },
+                                        ),
+                                      )),
                                 ),
                                 IconButton(
                                   padding: EdgeInsets.zero,

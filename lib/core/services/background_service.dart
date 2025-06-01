@@ -60,10 +60,10 @@ class AlarmBackgroundService {
           autoStart: false,
           isForegroundMode: true,
           notificationChannelId: 'alarm_foreground_service',
-          initialNotificationTitle: 'Alarm Service',
-          initialNotificationContent: 'Preparing alarm',
+          initialNotificationTitle: 'Alarm',
+          initialNotificationContent: '',
           foregroundServiceNotificationId: 888,
-          autoStartOnBoot: true,
+          autoStartOnBoot: false,
         ),
         iosConfiguration: IosConfiguration(
           autoStart: false,
@@ -75,7 +75,7 @@ class AlarmBackgroundService {
       _isInitialized = true;
       _isInitializing = false;
 
-      debugPrint('Background service initialized successfully');
+      debugPrint('Background service configured successfully');
       return true;
     } catch (e) {
       debugPrint('Error initializing background service: $e');
@@ -129,17 +129,16 @@ class AlarmBackgroundService {
     if (service is AndroidServiceInstance) {
       try {
         service.setAsForegroundService();
-        service.setAutoStartOnBootMode(true);
-        service.setForegroundNotificationInfo(
-          title: 'Alarm Ready',
-          content: 'Alarm service is running',
-        );
+        service.setAutoStartOnBootMode(false);
+        // Don't show notification until an alarm is actually running
+        debugPrint('Background service started and ready');
       } catch (e) {
         debugPrint('Error setting foreground service: $e');
       }
     }
 
-    Timer.periodic(const Duration(minutes: 3), (timer) {
+    // Check more frequently for inactive alarms to stop the service sooner
+    Timer.periodic(const Duration(seconds: 30), (timer) {
       if (!isAlarmActive) {
         debugPrint('No active alarm, stopping service');
         service.stopSelf();
@@ -165,8 +164,32 @@ class AlarmBackgroundService {
       try {
         isAlarmActive = true;
         final prefs = await SharedPreferences.getInstance();
-        final volume = prefs.getDouble('alarm_volume') ??
-            (prefs.getInt('alarm_volume')?.toDouble() ?? 0.5) / 100.0;
+
+        // Load the saved alarm volume - prioritize the specific alarm volume setting
+        double volume = 0.8; // Default fallback
+
+        // Try to get the volume from different sources in order of preference
+        final savedVolumeInt = prefs.getInt('alarm_volume');
+        final savedVolumeDouble = prefs.getDouble('alarm_volume');
+        final flutterVolumeInt = prefs.getInt('flutter.alarm_volume');
+
+        if (savedVolumeInt != null) {
+          volume = savedVolumeInt / 100.0; // Convert percentage to decimal
+          debugPrint('Using saved volume (int): $savedVolumeInt% -> $volume');
+        } else if (flutterVolumeInt != null) {
+          volume = flutterVolumeInt / 100.0; // Convert percentage to decimal
+          debugPrint(
+              'Using flutter volume (int): $flutterVolumeInt% -> $volume');
+        } else if (savedVolumeDouble != null) {
+          volume = savedVolumeDouble;
+          debugPrint('Using saved volume (double): $volume');
+        } else {
+          debugPrint('No saved volume found, using default: $volume');
+        }
+
+        // Ensure volume is within valid range
+        volume = volume.clamp(0.1, 1.0); // Minimum 10% to ensure audibility
+        debugPrint('Final alarm volume set to: $volume');
 
         await audioPlayer.stop();
         await audioPlayer.setReleaseMode(ReleaseMode.loop);
@@ -242,10 +265,8 @@ class AlarmBackgroundService {
         }
 
         if (service is AndroidServiceInstance) {
-          service.setForegroundNotificationInfo(
-            title: 'Alarm Service',
-            content: 'Stopping alarm...',
-          );
+          // Don't show the stopping notification, just log it
+          debugPrint('Stopping alarm service');
         }
 
         Timer(const Duration(seconds: 2), () {
@@ -540,8 +561,33 @@ class AlarmBackgroundService {
         }
 
         final player = AudioPlayer();
-        final volume = prefs.getDouble('alarm_volume') ??
-            (prefs.getInt('alarm_volume')?.toDouble() ?? 0.8) / 100.0;
+
+        // Load the saved alarm volume with proper fallback
+        double volume = 0.8; // Default fallback
+
+        // Try to get the volume from different sources in order of preference
+        final savedVolumeInt = prefs.getInt('alarm_volume');
+        final savedVolumeDouble = prefs.getDouble('alarm_volume');
+        final flutterVolumeInt = prefs.getInt('flutter.alarm_volume');
+
+        if (savedVolumeInt != null) {
+          volume = savedVolumeInt / 100.0; // Convert percentage to decimal
+          debugPrint(
+              'Fallback using saved volume (int): $savedVolumeInt% -> $volume');
+        } else if (flutterVolumeInt != null) {
+          volume = flutterVolumeInt / 100.0; // Convert percentage to decimal
+          debugPrint(
+              'Fallback using flutter volume (int): $flutterVolumeInt% -> $volume');
+        } else if (savedVolumeDouble != null) {
+          volume = savedVolumeDouble;
+          debugPrint('Fallback using saved volume (double): $volume');
+        } else {
+          debugPrint('Fallback: No saved volume found, using default: $volume');
+        }
+
+        // Ensure volume is within valid range
+        volume = volume.clamp(0.1, 1.0); // Minimum 10% to ensure audibility
+        debugPrint('Final fallback alarm volume set to: $volume');
 
         await player.setReleaseMode(ReleaseMode.loop);
         await player.setVolume(volume);
@@ -589,21 +635,25 @@ class AlarmBackgroundService {
 
       if (Platform.isAndroid) {
         try {
-          // First invoke forceStopService on the native side
+          // FIRST: Stop vibration immediately
+          await _platform.invokeMethod('stopVibration');
+          debugPrint('Vibration stopped immediately');
+
+          // Then invoke forceStopService on the native side
           await _platform.invokeMethod('forceStopService');
-          
+
           // Small delay to allow native operations to complete
           await Future.delayed(const Duration(milliseconds: 300));
-          
-          // Also explicitly stop vibration
+
+          // Stop vibration again to be absolutely sure
           await _platform.invokeMethod('stopVibration');
-          
+
           // Cancel all notifications
           await _platform.invokeMethod('cancelAllNotifications');
-          
+
           // Try a second time to force stop (extra safety)
           await _platform.invokeMethod('forceStopService');
-          
+
           debugPrint('Native services explicitly stopped');
         } catch (e) {
           debugPrint('Error stopping native service: $e');
@@ -724,6 +774,8 @@ class AlarmBackgroundService {
         debugPrint('Error scheduling exact alarm via channel: $e');
       }
 
+      // RE-ENABLED: AndroidAlarmManager as backup for when app is closed
+      // This ensures alarms work even when the app is completely closed
       try {
         final success = await AndroidAlarmManager.oneShotAt(
           scheduledTime,
@@ -742,10 +794,11 @@ class AlarmBackgroundService {
         );
 
         debugPrint(
-            'Alarm scheduled with AndroidAlarmManager.oneShotAt: $success');
+            'Backup alarm scheduled with AndroidAlarmManager.oneShotAt: $success');
         return success;
       } catch (e) {
-        debugPrint('Error scheduling alarm with AndroidAlarmManager: $e');
+        debugPrint(
+            'Error scheduling backup alarm with AndroidAlarmManager: $e');
         return false;
       }
     }
@@ -768,7 +821,37 @@ class AlarmBackgroundService {
     final bool nfcRequired = params['nfcRequired'] ?? false;
 
     debugPrint(
-        'Alarm callback received: ID=$alarmId, Sound=$soundId, NFC=$nfcRequired');
+        'Native alarm callback received: ID=$alarmId, Sound=$soundId, NFC=$nfcRequired');
+
+    // Check if Flutter Alarm package is already handling this alarm
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final activeFlutterAlarmId = prefs.getInt('flutter.active_alarm_id');
+
+      if (activeFlutterAlarmId == alarmId) {
+        debugPrint(
+            'Flutter Alarm package already handling alarm $alarmId, skipping native callback');
+        return;
+      }
+
+      // Check if alarm was triggered very recently (within 30 seconds) to avoid duplicates
+      final lastTriggerTime = prefs.getInt('alarm_last_trigger_$alarmId') ?? 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      if (now - lastTriggerTime < 30000) {
+        // 30 seconds
+        debugPrint('Alarm $alarmId was triggered recently, skipping duplicate');
+        return;
+      }
+
+      // Mark this alarm as triggered
+      await prefs.setInt('alarm_last_trigger_$alarmId', now);
+    } catch (e) {
+      debugPrint('Error checking for duplicate alarm triggers: $e');
+    }
+
+    // This is a backup trigger (app was closed), so start the alarm
+    debugPrint('Starting backup alarm (app was closed): $alarmId');
     await startAlarm(alarmId, soundId);
   }
 
@@ -876,7 +959,8 @@ class AlarmBackgroundService {
           category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
           showWhen: true,
-          playSound: false, // We handle sound separately
+          playSound: false,
+          // We handle sound separately
           sound: null,
           actions: [
             const AndroidNotificationAction(
@@ -1249,13 +1333,17 @@ class AlarmBackgroundService {
 
       if (existingAlarmsJson != null && existingAlarmsJson.isNotEmpty) {
         try {
-          if (existingAlarmsJson.startsWith('[') && existingAlarmsJson.endsWith(']')) {
+          if (existingAlarmsJson.startsWith('[') &&
+              existingAlarmsJson.endsWith(']')) {
             // It's JSON format
             final List<dynamic> jsonList = json.decode(existingAlarmsJson);
             alarms = jsonList.map((item) => item.toString()).toList();
           } else {
             // It's legacy format
-            alarms = existingAlarmsJson.split(',').where((s) => s.isNotEmpty).toList();
+            alarms = existingAlarmsJson
+                .split(',')
+                .where((s) => s.isNotEmpty)
+                .toList();
           }
         } catch (e) {
           debugPrint('Error parsing scheduled alarms: $e');
@@ -1288,7 +1376,6 @@ class AlarmBackgroundService {
     }
   }
 
-
   /// Remove a scheduled alarm
   static Future<void> removeScheduledAlarm(int alarmId) async {
     try {
@@ -1300,11 +1387,13 @@ class AlarmBackgroundService {
       try {
         List<String> alarms = [];
 
-        if (existingAlarmsJson.startsWith('[') && existingAlarmsJson.endsWith(']')) {
+        if (existingAlarmsJson.startsWith('[') &&
+            existingAlarmsJson.endsWith(']')) {
           final List<dynamic> jsonList = json.decode(existingAlarmsJson);
           alarms = jsonList.map((item) => item.toString()).toList();
         } else {
-          alarms = existingAlarmsJson.split(',').where((s) => s.isNotEmpty).toList();
+          alarms =
+              existingAlarmsJson.split(',').where((s) => s.isNotEmpty).toList();
         }
 
         final initialCount = alarms.length;
@@ -1318,7 +1407,8 @@ class AlarmBackgroundService {
         await cancelExactAlarm(alarmId);
 
         debugPrint('Removed scheduled alarm ID: $alarmId');
-        debugPrint('Alarms before: $initialCount, after: ${updatedAlarms.length}');
+        debugPrint(
+            'Alarms before: $initialCount, after: ${updatedAlarms.length}');
       } catch (e) {
         debugPrint('Error parsing alarms during removal: $e');
         await prefs.remove('scheduled_alarms');
@@ -1329,8 +1419,6 @@ class AlarmBackgroundService {
       debugPrint('Error removing scheduled alarm: $e');
     }
   }
-
-
 
   /// Recover active alarms on app restart
 
@@ -1385,7 +1473,8 @@ class AlarmBackgroundService {
   static Future<bool> cancelExactAlarm(int alarmId) async {
     if (Platform.isAndroid) {
       try {
-        final bool success = await _alarmManagerChannel.invokeMethod('cancelExactAlarm', {
+        final bool success =
+            await _alarmManagerChannel.invokeMethod('cancelExactAlarm', {
           'alarmId': alarmId,
         });
 
@@ -1409,7 +1498,6 @@ class AlarmBackgroundService {
     return false;
   }
 
-
   /// Check for missed alarms
 
   static Future<void> _checkForMissedAlarms() async {
@@ -1425,16 +1513,21 @@ class AlarmBackgroundService {
         try {
           List<String> alarms = [];
 
-          if (scheduledAlarmsString.startsWith('[') && scheduledAlarmsString.endsWith(']')) {
+          if (scheduledAlarmsString.startsWith('[') &&
+              scheduledAlarmsString.endsWith(']')) {
             // It's JSON format
             final List<dynamic> jsonList = json.decode(scheduledAlarmsString);
             alarms = jsonList.map((item) => item.toString()).toList();
           } else {
             // It's legacy format
-            alarms = scheduledAlarmsString.split(',').where((s) => s.isNotEmpty).toList();
+            alarms = scheduledAlarmsString
+                .split(',')
+                .where((s) => s.isNotEmpty)
+                .toList();
           }
 
-          debugPrint('Checking ${alarms.length} scheduled alarms for missed alarms');
+          debugPrint(
+              'Checking ${alarms.length} scheduled alarms for missed alarms');
 
           for (final alarmInfo in alarms) {
             final parts = alarmInfo.split(':');
@@ -1472,9 +1565,7 @@ class AlarmBackgroundService {
     }
   }
 
-
   /// Fix corrupted scheduled alarms data
-
 
   static Future<void> fixCorruptedScheduledAlarms() async {
     try {
@@ -1521,7 +1612,6 @@ class AlarmBackgroundService {
       debugPrint('Error fixing corrupted scheduled alarms: $e');
     }
   }
-
 
   /// Check if service is currently running an alarm
   static Future<bool> isAlarmActive() async {
@@ -1627,7 +1717,8 @@ class AlarmBackgroundService {
   /// Initialize on app start
   static Future<void> initializeOnAppStart() async {
     try {
-      await initializeService();
+      // Don't automatically initialize service - main.dart will handle this
+      // We only want services running when an alarm is active
 
       await fixCorruptedScheduledAlarms();
 
@@ -1661,14 +1752,41 @@ class AlarmBackgroundService {
             if (!directToStop) {
               await forceStartAlarmIfNeeded(alarmId, soundId);
             }
-            
+
             // We'll let the HomeScreen handle navigation based on this data
             // The HomeScreen will check for the directToStop flag in _checkAlarmLaunchIntent
+          } else {
+            // No active alarm or launch intent, make sure service is stopped
+            await forceStopService();
           }
         }
       }
     } catch (e) {
-      debugPrint('Error initializing on app start: $e');
+      debugPrint('Error recovering alarms: $e');
+    }
+  }
+
+  /// Emergency stop for vibration only
+  static Future<void> emergencyStopVibration() async {
+    try {
+      debugPrint('EMERGENCY VIBRATION STOP: Stopping all vibration');
+
+      if (Platform.isAndroid) {
+        try {
+          // Multiple attempts to stop vibration
+          await _platform.invokeMethod('stopVibration');
+          await Future.delayed(const Duration(milliseconds: 100));
+          await _platform.invokeMethod('stopVibration');
+          await Future.delayed(const Duration(milliseconds: 100));
+          await _platform.invokeMethod('stopVibration');
+
+          debugPrint('Emergency vibration stop completed');
+        } catch (e) {
+          debugPrint('Error in emergency vibration stop: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error in emergency vibration stop: $e');
     }
   }
 }

@@ -74,7 +74,20 @@ class AlarmSoundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Service start command received")
+        Log.d(TAG, "Service start command received with action: ${intent?.action}")
+
+        // Handle STOP_VIBRATION action
+        if (intent?.action == "STOP_VIBRATION") {
+            Log.d(TAG, "Received STOP_VIBRATION action")
+            try {
+                // Stop any vibration from AlarmReceiver
+                AlarmReceiver.stopAlarm()
+                Log.d(TAG, "Vibration stopped via AlarmReceiver")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping vibration via AlarmReceiver", e)
+            }
+            return START_NOT_STICKY
+        }
 
         // Extract parameters from intent
         soundId = intent?.getIntExtra("soundId", 1) ?: 1
@@ -381,20 +394,34 @@ class AlarmSoundService : Service() {
     private fun loadVolumeSetting() {
         try {
             val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val savedVolume = prefs.getInt("flutter.alarm_volume", -1)
             
-            if (savedVolume != -1) {
-                // Convert from percentage (0-100) to float (0.0-1.0)
-                currentVolume = savedVolume / 100.0f
-                Log.d(TAG, "Loaded volume setting from preferences: $savedVolume% ($currentVolume)")
-            } else {
-                // Default volume if not set
-                currentVolume = 0.7f
-                Log.d(TAG, "Using default volume: $currentVolume")
+            // Try to get volume from different sources in order of preference
+            var volumePercentage = -1
+            
+            // First try the standard alarm_volume key
+            volumePercentage = prefs.getInt("flutter.alarm_volume", -1)
+            if (volumePercentage == -1) {
+                volumePercentage = prefs.getInt("alarm_volume", -1)
             }
+            
+            if (volumePercentage != -1) {
+                // Convert from percentage (0-100) to float (0.0-1.0)
+                currentVolume = (volumePercentage / 100.0f).coerceIn(0.1f, 1.0f) // Minimum 10%
+                Log.d(TAG, "Loaded volume setting from preferences: $volumePercentage% -> $currentVolume")
+            } else {
+                // Default volume if not set - use 80% for good audibility
+                currentVolume = 0.8f
+                Log.d(TAG, "No volume setting found, using default: $currentVolume (80%)")
+            }
+            
+            // Also store the volume back to ensure consistency
+            prefs.edit()
+                .putInt("flutter.alarm_volume", (currentVolume * 100).toInt())
+                .apply()
+                
         } catch (e: Exception) {
             Log.e(TAG, "Error loading volume setting, using default", e)
-            currentVolume = 0.7f
+            currentVolume = 0.8f
         }
     }
 

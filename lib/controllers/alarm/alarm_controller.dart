@@ -20,6 +20,7 @@ import '../../core/services/sound_manager.dart';
 import '../nfc/nfc_controller.dart';
 import '../stats/stats_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:flutter/services.dart';
 
 class AlarmController extends GetxController {
   final DatabaseHelper _dbHelper;
@@ -54,16 +55,15 @@ class AlarmController extends GetxController {
     _startClockTimer();
     loadAlarms();
     _loadSavedVolume();
-    
+
     // Check for active alarms immediately
     _checkForActiveAlarms();
-    
+
     // Periodically check for active alarms
     Timer.periodic(const Duration(seconds: 15), (_) {
       _checkForActiveAlarms();
-      verifyAlarmStates();
     });
-    
+
     // Listen for ringing alarms from the Alarm package
     Alarm.ringing.listen((AlarmSet alarmSet) {
       for (final alarm in alarmSet.alarms) {
@@ -76,18 +76,39 @@ class AlarmController extends GetxController {
   /// Handle alarm ringing from the Alarm package
   Future<void> _handleAlarmPackageRinging(int packageAlarmId) async {
     try {
+      // Prevent duplicate handling of the same alarm
+      if (activeAlarmId.value == packageAlarmId) {
+        debugPrint(
+            'Alarm $packageAlarmId already being handled, skipping duplicate');
+        return;
+      }
+
       // Find the corresponding alarm in our system
       final alarm = getAlarmById(packageAlarmId);
       if (alarm != null) {
+        debugPrint(
+            'Flutter Alarm package triggered alarm: $packageAlarmId at ${DateTime.now().toIso8601String()}');
+
+        // Mark this alarm as triggered by Flutter Alarm package to prevent native duplicate
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('alarm_last_trigger_$packageAlarmId',
+              DateTime.now().millisecondsSinceEpoch);
+          debugPrint(
+              'Marked alarm $packageAlarmId as triggered by Flutter Alarm package');
+        } catch (e) {
+          debugPrint('Error marking alarm trigger: $e');
+        }
+
         activeAlarmId.value = packageAlarmId;
         shouldShowStopScreen.value = true;
         hasActiveAlarm.value = true;
-        
+
         // Store active alarm info
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('flutter.active_alarm_id', packageAlarmId);
         await prefs.setInt('flutter.active_alarm_sound', alarm.soundId);
-        
+
         // Ensure device stays awake
         _enableAlarmWakeLock();
       }
@@ -95,32 +116,45 @@ class AlarmController extends GetxController {
       debugPrint('Error handling alarm package ringing: $e');
     }
   }
-  
+
   /// Convert our AlarmModel to Alarm package's AlarmSettings
   AlarmSettings _convertToAlarmSettings(AlarmModel alarm) {
     // Get the proper sound path for the alarm
     final soundPath = 'assets/${SoundManager.getSoundPath(alarm.soundId)}';
-    
+
+    // Ensure volume is properly set - convert from 0-100 to 0.0-1.0
+    final volumeLevel = currentAlarmVolume.value / 100.0;
+
+    final nextAlarmTime = alarm.getNextAlarmTime();
+
+    debugPrint(
+        'Setting alarm volume to: ${currentAlarmVolume.value}% ($volumeLevel)');
+    debugPrint(
+        'Scheduling alarm for EXACT time: ${nextAlarmTime.toIso8601String()} (${nextAlarmTime.hour}:${nextAlarmTime.minute.toString().padLeft(2, '0')})');
+
     return AlarmSettings(
-      id: alarm.id ?? DateTime.now().millisecondsSinceEpoch,
-      dateTime: alarm.getNextAlarmTime(),
-      assetAudioPath: soundPath,
-      loopAudio: true,
-      vibrate: true,
-      warningNotificationOnKill: Platform.isIOS,
-      androidFullScreenIntent: true,
-      volumeSettings: VolumeSettings.fade(
-        volume: currentAlarmVolume.value / 100,
-        fadeDuration: const Duration(seconds: 30),
-        volumeEnforced: true,
-      ),
-      notificationSettings: NotificationSettings(
-        title: 'Alarm',
-        body: alarm.nfcRequired ? 'Scan NFC Tag to Stop Alarm' : 'Tap to Stop Alarm',
-        // stopButton: 'Stop',
-      ),
-      payload: alarm.nfcRequired ? 'nfc_required:true' : 'nfc_required:false'
-    );
+        id: alarm.id ?? DateTime.now().millisecondsSinceEpoch,
+        dateTime: nextAlarmTime,
+        assetAudioPath: soundPath,
+        loopAudio: true,
+        vibrate: true,
+        warningNotificationOnKill: Platform.isIOS,
+        androidFullScreenIntent: true,
+        volumeSettings: VolumeSettings.fade(
+          volume: volumeLevel,
+          fadeDuration:
+              const Duration(seconds: 5), // Shorter fade for immediate volume
+          volumeEnforced: true,
+        ),
+        notificationSettings: NotificationSettings(
+          title: 'Alarm',
+          body: alarm.nfcRequired
+              ? 'Scan NFC Tag to Stop Alarm'
+              : 'Tap to Stop Alarm',
+          // stopButton: 'Stop',
+        ),
+        payload:
+            alarm.nfcRequired ? 'nfc_required:true' : 'nfc_required:false');
   }
 
   /// Creates a new alarm and schedules it using the Alarm package
@@ -136,11 +170,23 @@ class AlarmController extends GetxController {
       final id = await _dbHelper.insertAlarm(alarm);
       alarm.id = id;
       await recordAlarmSetTime(alarm);
-      
+
       if (alarm.isEnabled) {
-        // Convert and set with the Alarm package
+        // PRIMARY: Use the Flutter Alarm package for when app is running
         final alarmSettings = _convertToAlarmSettings(alarm);
         await Alarm.set(alarmSettings: alarmSettings);
+
+        debugPrint(
+            'Alarm scheduled with Flutter Alarm package - ID: $id, Time: ${alarm.getNextAlarmTime().toIso8601String()}');
+
+        // BACKUP: Also schedule with native system for when app is closed
+        try {
+          await AlarmBackgroundService.scheduleExactAlarm(
+              id, alarm.getNextAlarmTime(), alarm.soundId, alarm.nfcRequired);
+          debugPrint('Backup native alarm scheduled for when app is closed');
+        } catch (e) {
+          debugPrint('Error scheduling backup native alarm: $e');
+        }
       }
 
       await loadAlarms();
@@ -164,14 +210,30 @@ class AlarmController extends GetxController {
       }
 
       await _dbHelper.updateAlarm(alarm);
-      
-      // Cancel the old alarm
+
+      // Cancel the old alarm from both systems
       await Alarm.stop(alarm.id!);
+      await AlarmBackgroundService.removeScheduledAlarm(alarm.id!);
+
+      // Also cancel the notification to ensure all alarm systems are stopped
+      await NotificationService.cancelNotification(alarm.id!);
 
       if (alarm.isEnabled) {
-        // Set the updated alarm with the Alarm package
+        // PRIMARY: Use the Flutter Alarm package for when app is running
         final alarmSettings = _convertToAlarmSettings(alarm);
         await Alarm.set(alarmSettings: alarmSettings);
+
+        debugPrint(
+            'Alarm updated with Flutter Alarm package - ID: ${alarm.id}, Time: ${alarm.getNextAlarmTime().toIso8601String()}');
+
+        // BACKUP: Also schedule with native system for when app is closed
+        try {
+          await AlarmBackgroundService.scheduleExactAlarm(alarm.id!,
+              alarm.getNextAlarmTime(), alarm.soundId, alarm.nfcRequired);
+          debugPrint('Backup native alarm updated for when app is closed');
+        } catch (e) {
+          debugPrint('Error updating backup native alarm: $e');
+        }
       }
 
       await loadAlarms();
@@ -185,7 +247,13 @@ class AlarmController extends GetxController {
   /// Deletes an alarm and cancels it
   Future<void> deleteAlarm(int id) async {
     try {
+      // Cancel from both systems
       await Alarm.stop(id);
+      await AlarmBackgroundService.removeScheduledAlarm(id);
+
+      // Also cancel the notification to ensure all alarm systems are stopped
+      await NotificationService.cancelNotification(id);
+
       await _dbHelper.deleteAlarm(id);
       await loadAlarms();
       refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
@@ -202,7 +270,14 @@ class AlarmController extends GetxController {
     try {
       alarm.isEnabled = false;
       await _dbHelper.updateAlarm(alarm);
+
+      // Cancel from both systems
       await Alarm.stop(alarm.id!);
+      await AlarmBackgroundService.removeScheduledAlarm(alarm.id!);
+
+      // Also cancel the notification to ensure all alarm systems are stopped
+      await NotificationService.cancelNotification(alarm.id!);
+
       await loadAlarms();
       refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
       update();
@@ -217,8 +292,20 @@ class AlarmController extends GetxController {
       if (alarm.id != null) {
         await Alarm.stop(alarm.id!);
       }
-      
+
       stopAlarmSound();
+
+      // Explicitly stop vibration using method channel
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('stopVibration');
+          debugPrint('Explicitly stopped vibration via method channel');
+        } catch (e) {
+          debugPrint('Error stopping vibration via method channel: $e');
+        }
+      }
+
       await AlarmBackgroundService.stopAlarm();
       try {
         await WakelockPlus.disable();
@@ -256,8 +343,21 @@ class AlarmController extends GetxController {
         return;
       }
 
+      // Explicitly stop vibration first
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.example.alarm/background_channel')
+              .invokeMethod('stopVibration');
+          debugPrint(
+              'Explicitly stopped vibration via method channel in stopAlarm');
+        } catch (e) {
+          debugPrint(
+              'Error stopping vibration via method channel in stopAlarm: $e');
+        }
+      }
+
       await stopAlarmAndUpdateState(alarm);
-      
+
       // If we need to stop using the Alarm package directly
       await Alarm.stop(alarmId);
 
@@ -293,7 +393,8 @@ class AlarmController extends GetxController {
       // Store snooze information
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('snoozed_from_alarm_id', alarmId);
-      await prefs.setInt('snooze_count', (prefs.getInt('snooze_count') ?? 0) + 1);
+      await prefs.setInt(
+          'snooze_count', (prefs.getInt('snooze_count') ?? 0) + 1);
 
       // Schedule the snooze alarm
       await createAlarm(snoozeAlarm);
@@ -310,6 +411,9 @@ class AlarmController extends GetxController {
   }
 
   /// Checks for alarms that should be ringing but aren't
+  /// DISABLED: This method was causing duplicate alarm triggers
+  /// The Flutter Alarm package handles alarm state verification automatically
+  /*
   Future<void> verifyAlarmStates() async {
     try {
       final now = DateTime.now();
@@ -322,22 +426,27 @@ class AlarmController extends GetxController {
           // But our active alarm ID doesn't match
           if (activeAlarmId.value != alarm.id) {
             // Check when this alarm was last activated
-            final lastActivated = prefs.getInt('alarm_last_activated_${alarm.id}') ?? 0;
-            final timeSinceActivation = now.millisecondsSinceEpoch - lastActivated;
+            final lastActivated =
+                prefs.getInt('alarm_last_activated_${alarm.id}') ?? 0;
+            final timeSinceActivation =
+                now.millisecondsSinceEpoch - lastActivated;
 
             // Only trigger if it hasn't been activated in the last 30 seconds
             if (timeSinceActivation > 30000) {
-              debugPrint('Found alarm ${alarm.id} that should be ringing but isn\'t active');
+              debugPrint(
+                  'Found alarm ${alarm.id} that should be ringing but isn\'t active');
 
               // Start the alarm
               await playAlarmSound(alarm.soundId, alarmId: alarm.id);
 
               // Only show notification if the sound playback was successful (not deduplicated)
               if (activeAlarmId.value == alarm.id) {
-                await NotificationService.showFallbackAlarmNotification(alarm.id!, alarm.soundId);
+                await NotificationService.showFallbackAlarmNotification(
+                    alarm.id!, alarm.soundId);
               }
             } else {
-              debugPrint('Alarm ${alarm.id} was recently activated, skipping duplicate trigger');
+              debugPrint(
+                  'Alarm ${alarm.id} was recently activated, skipping duplicate trigger');
             }
           }
         }
@@ -346,17 +455,42 @@ class AlarmController extends GetxController {
       debugPrint('Error verifying alarm states: $e');
     }
   }
+  */
 
   /// Load saved volume from shared preferences
   Future<void> _loadSavedVolume() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      final savedVolume = _prefs.getInt('alarm_volume');
-      if (savedVolume != null) {
-        currentAlarmVolume.value = savedVolume;
+
+      // Try to load volume from different sources in order of preference
+      int? savedVolume;
+
+      // First try the flutter-specific key
+      savedVolume = _prefs.getInt('flutter.alarm_volume');
+      if (savedVolume == null) {
+        savedVolume = _prefs.getInt('alarm_volume');
       }
+
+      if (savedVolume != null) {
+        currentAlarmVolume.value =
+            savedVolume.clamp(10, 100); // Minimum 10% for audibility
+        debugPrint(
+            'Loaded saved alarm volume: $savedVolume% -> ${currentAlarmVolume.value}%');
+      } else {
+        // Default to 80% if no saved volume
+        currentAlarmVolume.value = 80;
+        debugPrint(
+            'No saved volume found, using default: ${currentAlarmVolume.value}%');
+      }
+
+      // Ensure volume is saved in all necessary keys for consistency
+      await _prefs.setInt('alarm_volume', currentAlarmVolume.value);
+      await _prefs.setInt('flutter.alarm_volume', currentAlarmVolume.value);
+      await _prefs.setDouble(
+          'alarm_volume_double', currentAlarmVolume.value / 100.0);
     } catch (e) {
       debugPrint('Error loading saved volume: $e');
+      currentAlarmVolume.value = 80; // Default fallback
     }
   }
 
@@ -434,13 +568,15 @@ class AlarmController extends GetxController {
   }
 
   /// Plays the selected alarm sound, either as a preview or full alarm
-  Future<void> playAlarmSound(int soundId, {bool isPreview = false, int? alarmId}) async {
+  Future<void> playAlarmSound(int soundId,
+      {bool isPreview = false, int? alarmId}) async {
     try {
       // For actual alarms (not previews), check for duplicates
       if (!isPreview && alarmId != null) {
         // Use the NotificationService's deduplication logic
         if (!(await NotificationService.markAlarmAsActivated(alarmId))) {
-          debugPrint('Skipping duplicate alarm sound playback for ID: $alarmId');
+          debugPrint(
+              'Skipping duplicate alarm sound playback for ID: $alarmId');
           return; // Skip duplicate activation
         }
       }
@@ -448,13 +584,20 @@ class AlarmController extends GetxController {
       await _audioPlayer.stop();
       final soundPath = SoundManager.getSoundPath(soundId);
       debugPrint('Playing sound: $soundPath (Preview: $isPreview)');
-      await _audioPlayer.setReleaseMode(isPreview ? ReleaseMode.release : ReleaseMode.loop);
+      await _audioPlayer
+          .setReleaseMode(isPreview ? ReleaseMode.release : ReleaseMode.loop);
 
       final volume = isPreview
           ? (currentAlarmVolume.value / 100) * 0.5
           : (currentAlarmVolume.value / 100);
 
-      await _audioPlayer.setVolume(volume);
+      // Ensure minimum volume for alarms (not previews)
+      final finalVolume = isPreview ? volume : volume.clamp(0.1, 1.0);
+
+      debugPrint(
+          'Setting audio player volume to: ${currentAlarmVolume.value}% -> $finalVolume (Preview: $isPreview)');
+
+      await _audioPlayer.setVolume(finalVolume);
       await _audioPlayer.setSourceAsset(soundPath);
       await _audioPlayer.resume();
 
@@ -468,11 +611,11 @@ class AlarmController extends GetxController {
         _alarmSoundTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
           _increaseAlarmVolumeGradually();
         });
-        
+
         // Update the shouldShowStopScreen value to indicate that the stop alarm screen should be shown
         shouldShowStopScreen.value = true;
         hasActiveAlarm.value = true;
-        
+
         // Store the active alarm ID in shared preferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('flutter.active_alarm_id', alarmId);
@@ -516,7 +659,8 @@ class AlarmController extends GetxController {
       Timer.periodic(const Duration(seconds: 5), (timer) {
         if (activeAlarmId.value == -1) {
           timer.cancel();
-          WakelockPlus.disable().catchError((e) => debugPrint('Error disabling wakelock: $e'));
+          WakelockPlus.disable()
+              .catchError((e) => debugPrint('Error disabling wakelock: $e'));
         }
       });
     }
@@ -535,7 +679,16 @@ class AlarmController extends GetxController {
   Future<void> updateAlarmVolume(int volume) async {
     try {
       currentAlarmVolume.value = volume.clamp(0, 100);
+
+      // Save to multiple keys to ensure consistency across all components
       await _prefs.setInt('alarm_volume', currentAlarmVolume.value);
+      await _prefs.setInt('flutter.alarm_volume', currentAlarmVolume.value);
+      await _prefs.setDouble(
+          'alarm_volume_double', currentAlarmVolume.value / 100.0);
+
+      debugPrint(
+          'Updated alarm volume to: ${currentAlarmVolume.value}% (${currentAlarmVolume.value / 100.0})');
+
       if (_audioPlayer.state == PlayerState.playing) {
         await _audioPlayer.setVolume(currentAlarmVolume.value / 100);
       }
@@ -563,7 +716,8 @@ class AlarmController extends GetxController {
   }
 
   /// Processes alarm dismissal based on verification method
-  Future<bool> dismissAlarm(int alarmId, {String? backupCode, bool nfcVerified = false}) async {
+  Future<bool> dismissAlarm(int alarmId,
+      {String? backupCode, bool nfcVerified = false}) async {
     try {
       final alarm = getAlarmById(alarmId);
       if (alarm == null) {
@@ -574,7 +728,7 @@ class AlarmController extends GetxController {
       bool isVerified = false;
 
       // Only verify with backup code "12345"
-      if (backupCode != null && backupCode == "12345") {
+      if (backupCode != null && backupCode == "RH2ASJKJ2394J") {
         isVerified = true;
       } else if (nfcVerified) {
         // If using NFC verification, keep that functionality
@@ -774,17 +928,17 @@ class AlarmController extends GetxController {
         hasActiveAlarm.value = isActive;
         update();
       }
-      
+
       // If there's an active alarm, we should show the stop screen
       if (isActive) {
         final prefs = await SharedPreferences.getInstance();
         final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
         final activeSoundId = prefs.getInt('flutter.active_alarm_sound') ?? 1;
-        
+
         if (activeAlarmId != null && activeAlarmId > 0) {
           this.activeAlarmId.value = activeAlarmId;
           shouldShowStopScreen.value = true;
-          
+
           // Ensure the app stays awake while alarm is active
           try {
             await WakelockPlus.enable();
@@ -814,6 +968,3 @@ class AlarmController extends GetxController {
     super.onClose();
   }
 }
-
-
-

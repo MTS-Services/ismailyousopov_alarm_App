@@ -26,36 +26,44 @@ import 'core/theme/app_theme.dart';
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  
+
   // Initialize the Alarm package
   await Alarm.init();
-  
+
   final dbHelper = DatabaseHelper();
   await dbHelper.verifyDatabaseConnection();
-  await AlarmBackgroundService.initializeService();
-  await NotificationService.initialize();
-  
-  // Initialize the alarm service and check existing alarm state
-  await AlarmBackgroundService.initializeOnAppStart();
-  
-  // Check if onboarding is completed
+
+  // First check if there's an active alarm before initializing service
   final prefs = await SharedPreferences.getInstance();
-  final hasCompletedOnboarding = prefs.getBool('hasCompletedOnboarding') ?? false;
-  
+  final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
+
+  // Only initialize service if there is an active alarm or we're launching from an alarm
+  final bool shouldInitializeService = activeAlarmId != null;
+
+  if (shouldInitializeService) {
+    await AlarmBackgroundService.initializeService();
+    await AlarmBackgroundService.initializeOnAppStart();
+  }
+
+  await NotificationService.initialize();
+
+  // Check if onboarding is completed
+  final hasCompletedOnboarding =
+      prefs.getBool('hasCompletedOnboarding') ?? false;
+
   // Check if there's an active alarm - we'll handle navigation in HomeScreen
   final isAlarmActive = await AlarmBackgroundService.isAlarmActive();
-  
+
   FlutterNativeSplash.remove();
   runApp(MyApp(
-    hasCompletedOnboarding: hasCompletedOnboarding, 
-    hasActiveAlarm: isAlarmActive
-  ));
+      hasCompletedOnboarding: hasCompletedOnboarding,
+      hasActiveAlarm: isAlarmActive));
 }
 
 class MyApp extends StatelessWidget {
   final bool hasCompletedOnboarding;
   final bool hasActiveAlarm;
-  
+
   const MyApp({
     super.key,
     this.hasCompletedOnboarding = false,
@@ -67,14 +75,14 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       title: AppConstants.appName,
       theme: AppTheme.lightTheme,
-      initialBinding: BindingsBuilder(
-        () {
-          Get.put(DatabaseHelper());
-          Get.put(AlarmBackgroundService());
-          Get.put(NotificationService());
-          Get.put(AlarmController());
+      initialBinding: BindingsBuilder(() {
+        Get.put(DatabaseHelper());
+        Get.put(AlarmBackgroundService());
+        Get.put(NotificationService());
+        Get.put(AlarmController());
       }),
-      initialRoute: hasCompletedOnboarding ? AppConstants.home : AppConstants.onboarding,
+      initialRoute:
+          hasCompletedOnboarding ? AppConstants.home : AppConstants.onboarding,
       getPages: [
         GetPage(
           name: AppConstants.onboarding,
@@ -127,9 +135,9 @@ class MyApp extends StatelessWidget {
             final Map<String, dynamic> args = Get.arguments ?? {};
             final int alarmId = args['alarmId'] ?? 0;
             final int soundId = args['soundId'] ?? 1;
-            
-            return AlarmStopScreen.fromArguments(args.isEmpty ? 
-              {'alarmId': alarmId, 'soundId': soundId} : args);
+
+            return AlarmStopScreen.fromArguments(
+                args.isEmpty ? {'alarmId': alarmId, 'soundId': soundId} : args);
           },
           transition: Transition.fadeIn,
         ),

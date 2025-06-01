@@ -34,20 +34,21 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
       try {
         final activeAlarms = _alarmController.getActiveAlarms();
         final matchingAlarm = activeAlarms.firstWhere(
-          (active) => 
-              active.time.hour == alarm.time.hour && 
+          (active) =>
+              active.time.hour == alarm.time.hour &&
               active.time.minute == alarm.time.minute &&
               active.soundId == alarm.soundId,
           orElse: () => AlarmModel(time: DateTime.now(), id: -1),
         );
-        
+
         if (matchingAlarm.id != null && matchingAlarm.id != -1) {
           await _databaseHelper.deleteAlarm(matchingAlarm.id!);
           await _alarmController.loadAlarms();
-          _alarmController.refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+          _alarmController.refreshTimestamp.value =
+              DateTime.now().millisecondsSinceEpoch;
           _showFeedbackMessage('Alarm disabled');
         }
-        
+
         await _loadAlarms();
       } catch (e) {
         debugPrint('Error disabling alarm: $e');
@@ -55,7 +56,7 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
       }
       return;
     }
-    
+
     try {
       final DateTime now = DateTime.now();
       DateTime newTime;
@@ -145,40 +146,21 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     }
   }
 
-  /// Displays a time widget with hours, minutes and AM/PM indicator
+  /// Displays a time widget with hours and minutes in 24-hour format
   Widget _formatTimeWidget(DateTime? time, {double scaleFactor = 1.0}) {
     if (time == null) return const Text('');
 
-    final hour =
-    time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.hour >= 12 ? 'PM' : 'AM';
-
     final timeFontSize = 35.0 * scaleFactor;
-    final periodFontSize = 10.0 * scaleFactor;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          '$hour:$minute',
-          style: GoogleFonts.interTight(
-            color: Colors.white,
-            fontSize: timeFontSize,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Text(
-          period,
-          style: GoogleFonts.interTight(
-            color: Colors.white,
-            fontSize: periodFontSize,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+    return Text(
+      '$hour:$minute',
+      style: GoogleFonts.interTight(
+        color: Colors.white,
+        fontSize: timeFontSize,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 
@@ -244,8 +226,8 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
       if (_isLoading.value) {
         return Center(
             child: CircularProgressIndicator(
-              color: Theme.of(context).primaryColor,
-            ));
+          color: Theme.of(context).primaryColor,
+        ));
       }
 
       if (_alarms.isEmpty) {
@@ -273,9 +255,13 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
   /// Builds an individual alarm card with time display and action buttons
   Widget _buildAlarmCard(AlarmModel alarm) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final scaleFactor = screenWidth < 320 ? 0.75 :
-    screenWidth < 360 ? 0.85 :
-    screenWidth < 400 ? 0.95 : 1.0;
+    final scaleFactor = screenWidth < 320
+        ? 0.75
+        : screenWidth < 360
+            ? 0.85
+            : screenWidth < 400
+                ? 0.95
+                : 1.0;
 
     return Material(
       color: Colors.transparent,
@@ -321,12 +307,10 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
     final horizontalPadding = 8.0 * scaleFactor;
 
     // Check if the alarm exists in active alarms
-    bool isActive = _alarmController.getActiveAlarms().any(
-        (activeAlarm) => 
-            activeAlarm.time.hour == alarm.time.hour && 
-            activeAlarm.time.minute == alarm.time.minute &&
-            activeAlarm.soundId == alarm.soundId
-    );
+    bool isActive = _alarmController.getActiveAlarms().any((activeAlarm) =>
+        activeAlarm.time.hour == alarm.time.hour &&
+        activeAlarm.time.minute == alarm.time.minute &&
+        activeAlarm.soundId == alarm.soundId);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -387,7 +371,6 @@ extension WidgetListExtension on List<Widget> {
     return newList;
   }
 }
-
 
 double max(double a, double b) {
   return a > b ? a : b;

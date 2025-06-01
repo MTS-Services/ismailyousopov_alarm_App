@@ -14,8 +14,6 @@ class AlarmModel {
   DateTime? lastStopTime;
   int durationMinutes;
 
-
-
   /// Creates a new alarm with specified properties
   AlarmModel({
     this.id,
@@ -29,7 +27,6 @@ class AlarmModel {
     this.lastStopTime,
     this.durationMinutes = 30,
   });
-
 
   /// Converts the alarm model to a map for database storage
   Map<String, dynamic> toMap() {
@@ -59,8 +56,12 @@ class AlarmModel {
           ? []
           : map['days_active'].split(','),
       isForToday: map['is_for_today'] == 1,
-      lastSetTime: map['last_set_time'] != null ? DateTime.parse(map['last_set_time']) : null,
-      lastStopTime: map['last_stop_time'] != null ? DateTime.parse(map['last_stop_time']) : null,
+      lastSetTime: map['last_set_time'] != null
+          ? DateTime.parse(map['last_set_time'])
+          : null,
+      lastStopTime: map['last_stop_time'] != null
+          ? DateTime.parse(map['last_stop_time'])
+          : null,
       durationMinutes: map['duration_minutes'] ?? 30,
     );
   }
@@ -76,7 +77,7 @@ class AlarmModel {
       return true;
     }
 
-    // Check if the alarm time is within the last minute (to catch alarms that just triggered)
+    // Check if the alarm time is exactly now (within 30 seconds for precision)
     final alarmTimeToday = DateTime(
       now.year,
       now.month,
@@ -85,10 +86,11 @@ class AlarmModel {
       time.minute,
     );
 
-    // Changed condition to only consider alarm as ringing if we're at or past the alarm time
-    // but not more than 1 minute after it
-    final diff = now.difference(alarmTimeToday).inMinutes;
-    return diff >= 0 && diff < 1;
+    // Only consider alarm as ringing if we're at or past the EXACT alarm time
+    // but not more than 30 seconds after it (to avoid false positives)
+    final diff = now.difference(alarmTimeToday).inSeconds;
+    return diff >= 0 &&
+        diff <= 30; // Changed from 1 minute to 30 seconds for precision
   }
 
   /// Determines if this alarm will trigger today
@@ -129,7 +131,6 @@ class AlarmModel {
     }
   }
 
-
   /// Determines if the alarm should be active based on current time and settings
   bool shouldBeActive() {
     if (!isEnabled) return false;
@@ -165,8 +166,7 @@ class AlarmModel {
     }
   }
 
-
- /// calculate actual alarm duration
+  /// calculate actual alarm duration
   int calculateActualDuration() {
     if (lastSetTime == null || lastStopTime == null) {
       return durationMinutes > 0 ? durationMinutes : 1;
@@ -176,7 +176,6 @@ class AlarmModel {
 
     return duration > 0 ? duration : 1;
   }
-
 
   /// Gets the expected end time of the alarm based on its duration
   DateTime getEndTime() {
@@ -249,7 +248,6 @@ class AlarmModel {
   /// Checks if the alarm is set to repeat on specific days
   bool get isRepeating => daysActive.isNotEmpty;
 
-
   /// Gets a formatted string representation of active days
   String getFormattedDays() {
     if (daysActive.isEmpty) return "Once";
@@ -280,16 +278,12 @@ class AlarmModel {
     return activeDayIndices.map((index) => dayNames[index]).join(', ');
   }
 
-
-  /// Returns a formatted time string (e.g., "08:30 AM")
+  /// Returns a formatted time string (e.g., "08:30")
   String getFormattedTime() {
-    final hour = time.hour;
-    final minute = time.minute;
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    final displayMinute = minute.toString().padLeft(2, '0');
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
 
-    return '$displayHour:$displayMinute $period';
+    return '$hour:$minute';
   }
 
   /// Returns a formatted duration string (e.g. "1h 30m")
@@ -377,16 +371,16 @@ class AlarmModel {
   /// Generates a hash code for this alarm based on its properties
   @override
   int get hashCode => Object.hash(
-    id,
-    time.hour,
-    time.minute,
-    isEnabled,
-    soundId,
-    nfcRequired,
-    Object.hashAll(daysActive),
-    isForToday,
-    durationMinutes,
-  );
+        id,
+        time.hour,
+        time.minute,
+        isEnabled,
+        soundId,
+        nfcRequired,
+        Object.hashAll(daysActive),
+        isForToday,
+        durationMinutes,
+      );
 }
 
 /// Extension to compare lists (used in equality check)

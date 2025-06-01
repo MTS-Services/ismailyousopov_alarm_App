@@ -1,8 +1,10 @@
 import 'package:alarmapp/views/onboarding/onboarding_screen.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/asset_constants.dart';
 
@@ -244,12 +246,33 @@ class CustomDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.polyline_sharp),
               title: Text(
-                'Terms and Conditions',
+                'Privacy Policy',
                 style: GoogleFonts.inter(
                   fontSize: 20,
                 ),
               ),
-              onTap: () {},
+              onTap: () async {
+                final Uri url = Uri.parse(
+                    'https://earlyuptag.com/policies/privacy-policy');
+                try {
+                  if (!await launchUrl(
+                    url,
+                    mode: LaunchMode.externalApplication,
+                  )) {
+                    throw Exception('Could not launch $url');
+                  }
+                } catch (e) {
+                  if (kDebugMode) {
+                    print('Error launching URL: $e');
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could not open the Privacy Policy page'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
             ),
             ListTile(
               leading: const FaIcon(FontAwesomeIcons.handsHelping),
@@ -259,7 +282,28 @@ class CustomDrawer extends StatelessWidget {
                   fontSize: 20,
                 ),
               ),
-              onTap: () {},
+              onTap: () async {
+                final Uri url = Uri.parse(
+                    'https://earlyuptag.com/pages/contact');
+                try {
+                  if (!await launchUrl(
+                    url,
+                    mode: LaunchMode.externalApplication,
+                  )) {
+                    throw Exception('Could not launch $url');
+                  }
+                } catch (e) {
+                  if (kDebugMode) {
+                    print('Error launching URL: $e');
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could not open the Help page'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
             ),
           ],
         ),

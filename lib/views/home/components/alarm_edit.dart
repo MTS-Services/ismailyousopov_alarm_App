@@ -66,7 +66,6 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     }
   }
 
-
   /// Disables an alarm and cancels its notification
   Future<void> _cancelAlarm(AlarmModel alarm) async {
     if (alarm.id == null) return;
@@ -99,9 +98,6 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     }
   }
 
-
-
-
   /// Navigates to the alarm settings screen with the selected alarm for editing
   void _editAlarm(AlarmModel alarm) {
     _alarmController.stopAlarmSound();
@@ -114,38 +110,20 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     });
   }
 
-  /// Displays a time widget with hours, minutes and AM/PM indicator
+  /// Displays a time widget with hours and minutes in 24-hour format
   Widget _formatTimeWidget(DateTime? time, {double scaleFactor = 1.0}) {
     if (time == null) return const Text('');
-    final hour =
-    time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.hour >= 12 ? 'PM' : 'AM';
     final timeFontSize = 35.0 * scaleFactor;
-    final periodFontSize = 10.0 * scaleFactor;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          '$hour:$minute',
-          style: GoogleFonts.interTight(
-            color: Colors.white,
-            fontSize: timeFontSize,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Text(
-          period,
-          style: GoogleFonts.interTight(
-            color: Colors.white,
-            fontSize: periodFontSize,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+    return Text(
+      '$hour:$minute',
+      style: GoogleFonts.interTight(
+        color: Colors.white,
+        fontSize: timeFontSize,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 
@@ -261,9 +239,13 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
   /// Builds an individual alarm card with time display, days indicator and action buttons
   Widget _buildAlarmCard(AlarmModel alarm) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final scaleFactor = screenWidth < 320 ? 0.75 :
-    screenWidth < 360 ? 0.85 :
-    screenWidth < 400 ? 0.95 : 1.0;
+    final scaleFactor = screenWidth < 320
+        ? 0.75
+        : screenWidth < 360
+            ? 0.85
+            : screenWidth < 400
+                ? 0.95
+                : 1.0;
 
     return Material(
       color: Colors.transparent,
@@ -288,12 +270,14 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
                 children: [
                   Padding(
                     padding: EdgeInsets.only(left: 22 * scaleFactor),
-                    child: _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
+                    child:
+                        _formatTimeWidget(alarm.time, scaleFactor: scaleFactor),
                   ),
                   _buildActionButtons(alarm, scaleFactor: scaleFactor),
                 ],
               ),
-              if (alarm.daysActive.isNotEmpty && alarm.daysActive.first.isNotEmpty)
+              if (alarm.daysActive.isNotEmpty &&
+                  alarm.daysActive.first.isNotEmpty)
                 Padding(
                   padding: EdgeInsets.only(
                     left: 22 * scaleFactor,
@@ -379,7 +363,6 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     );
   }
 }
-
 
 double max(double a, double b) {
   return a > b ? a : b;

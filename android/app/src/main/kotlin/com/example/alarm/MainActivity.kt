@@ -224,7 +224,8 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        // Handle alarm manager channel
+        // Handle alarm manager channel - RE-ENABLED as backup for when app is closed
+        // Primary: Flutter Alarm package, Backup: Native scheduling
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ALARM_MANAGER_CHANNEL).setMethodCallHandler { call, result ->
             if (call.method == "scheduleExactAlarm") {
                 val alarmId = call.argument<Int>("alarmId") ?: 0
@@ -355,12 +356,47 @@ class MainActivity: FlutterActivity() {
 
 
     private fun stopVibration() {
-        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        vibrator?.cancel()
+        Log.d(TAG, "Stopping vibration - comprehensive approach")
+        
+        try {
+            // Stop system vibrator
+            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            vibrator?.cancel()
+            Log.d(TAG, "System vibrator cancelled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping system vibrator", e)
+        }
 
-        // Also stop the alarm receiver's vibration
-        AlarmReceiver.stopAlarm()
-        Log.d(TAG, "Stopped vibration")
+        try {
+            // Stop the alarm receiver's vibration
+            AlarmReceiver.stopAlarm()
+            Log.d(TAG, "AlarmReceiver.stopAlarm() called")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calling AlarmReceiver.stopAlarm()", e)
+        }
+
+        try {
+            // Also try to stop any vibration from AlarmSoundService
+            val serviceIntent = Intent(this, AlarmSoundService::class.java)
+            serviceIntent.action = "STOP_VIBRATION"
+            startService(serviceIntent)
+            Log.d(TAG, "Sent stop vibration command to AlarmSoundService")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending stop vibration to service", e)
+        }
+
+        // Double-check by trying to cancel vibration again after a short delay
+        Handler(Looper.getMainLooper()).postDelayed({
+            try {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                vibrator?.cancel()
+                Log.d(TAG, "Double-checked vibration cancellation")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in double-check vibration cancellation", e)
+            }
+        }, 100)
+
+        Log.d(TAG, "Vibration stop sequence completed")
     }
 
     private fun cancelAllNotifications() {
@@ -491,8 +527,8 @@ class MainActivity: FlutterActivity() {
             putExtra("nfcRequired", nfcRequired)
         }
 
-        // Add 1 second buffer to ensure the alarm triggers exactly on time, not early
-        val adjustedTriggerTime = triggerAtMillis + 1000
+        // Use the exact trigger time without any adjustment to ensure precise timing
+        val exactTriggerTime = triggerAtMillis
 
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
         val pendingIntent = android.app.PendingIntent.getBroadcast(
@@ -531,8 +567,8 @@ class MainActivity: FlutterActivity() {
             // Remove any existing entry for this alarm ID
             alarmsList.removeAll { it.startsWith("$alarmId:") }
 
-            // Add the new alarm - use the adjusted trigger time
-            val alarmInfo = "$alarmId:$soundId:$adjustedTriggerTime:$nfcRequired"
+            // Add the new alarm - use the exact trigger time
+            val alarmInfo = "$alarmId:$soundId:$exactTriggerTime:$nfcRequired"
             alarmsList.add(alarmInfo)
 
             // Store as a simple comma-separated list
@@ -544,26 +580,26 @@ class MainActivity: FlutterActivity() {
             Log.e(TAG, "Error storing scheduled alarm", e)
         }
 
-        // Schedule the alarm with adjusted time
+        // Schedule the alarm with exact time
         try {
             when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms() -> {
                     // Use both methods for redundancy
-                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
-                    alarmManager.setAlarmClock(android.app.AlarmManager.AlarmClockInfo(adjustedTriggerTime, pendingIntent), pendingIntent)
-                    Log.d(TAG, "Scheduled exact alarm with AlarmClock (Android 12+): ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
+                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, exactTriggerTime, pendingIntent)
+                    alarmManager.setAlarmClock(android.app.AlarmManager.AlarmClockInfo(exactTriggerTime, pendingIntent), pendingIntent)
+                    Log.d(TAG, "Scheduled exact alarm with AlarmClock (Android 12+): ID=$alarmId, Time=$exactTriggerTime (original=$triggerAtMillis)")
                 }
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
-                    Log.d(TAG, "Scheduled exact alarm with setExactAndAllowWhileIdle: ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
+                    alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, exactTriggerTime, pendingIntent)
+                    Log.d(TAG, "Scheduled exact alarm with setExactAndAllowWhileIdle: ID=$alarmId, Time=$exactTriggerTime (original=$triggerAtMillis)")
                 }
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
-                    alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
-                    Log.d(TAG, "Scheduled exact alarm with setExact: ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
+                    alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, exactTriggerTime, pendingIntent)
+                    Log.d(TAG, "Scheduled exact alarm with setExact: ID=$alarmId, Time=$exactTriggerTime (original=$triggerAtMillis)")
                 }
                 else -> {
-                    alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, adjustedTriggerTime, pendingIntent)
-                    Log.d(TAG, "Scheduled alarm with set: ID=$alarmId, Time=$adjustedTriggerTime (original=$triggerAtMillis)")
+                    alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, exactTriggerTime, pendingIntent)
+                    Log.d(TAG, "Scheduled alarm with set: ID=$alarmId, Time=$exactTriggerTime (original=$triggerAtMillis)")
                 }
             }
         } catch (e: Exception) {
