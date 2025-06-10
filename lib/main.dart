@@ -82,7 +82,7 @@ class MyApp extends StatelessWidget {
         Get.put(AlarmController());
       }),
       initialRoute:
-          hasCompletedOnboarding ? AppConstants.home : AppConstants.onboarding,
+          hasCompletedOnboarding ? AppConstants.home : AppConstants.home,
       getPages: [
         GetPage(
           name: AppConstants.onboarding,

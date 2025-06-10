@@ -19,10 +19,8 @@ class AlarmSetScreen extends StatefulWidget {
 class _AlarmSetScreenState extends State<AlarmSetScreen> {
   final AlarmController _alarmController = Get.find<AlarmController>();
   bool _nfcEnabled = false;
-  int _selectedSoundId = 1;
   DateTime _selectedDateTime = DateTime.now();
   final scaffoldKey = GlobalKey<ScaffoldState>();
-  String _selectedSoundName = SoundManager.getSoundName(1);
   AlarmModel? _editingAlarm;
   bool _isEditing = false;
   final NFCController nfcController = Get.put(NFCController());
@@ -34,8 +32,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
       _editingAlarm = Get.arguments as AlarmModel;
       _isEditing = true;
       _selectedDateTime = _editingAlarm!.time;
-      _selectedSoundId = _editingAlarm!.soundId;
-      _selectedSoundName = SoundManager.getSoundName(_selectedSoundId);
+      _alarmController.updateSelectedSound(_editingAlarm!.soundId);
       _nfcEnabled = _editingAlarm!.nfcRequired;
     }
   }
@@ -68,7 +65,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
         id: _editingAlarm!.id,
         time: selectedDateTime,
         isEnabled: true,
-        soundId: _selectedSoundId,
+        soundId: _alarmController.selectedSoundForNewAlarm.value,
         nfcRequired: _nfcEnabled,
         daysActive: _editingAlarm!.daysActive,
       );
@@ -78,7 +75,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
       final newAlarm = AlarmModel(
         time: selectedDateTime,
         isEnabled: true,
-        soundId: _selectedSoundId,
+        soundId: _alarmController.selectedSoundForNewAlarm.value,
         nfcRequired: _nfcEnabled,
         daysActive: [],
       );
@@ -394,15 +391,12 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                             _alarmController.stopAlarmSound();
                             final result = await Get.toNamed(
                               AppConstants.alarmSounds,
-                              arguments: _selectedSoundId,
+                              arguments: _alarmController
+                                  .selectedSoundForNewAlarm.value,
                             );
                             if (result != null) {
-                              setState(() {
-                                _selectedSoundId = result;
-                                _selectedSoundName =
-                                    SoundManager.getSoundName(_selectedSoundId);
-                              });
-                              _alarmController.playAlarmSound(_selectedSoundId);
+                              _alarmController.updateSelectedSound(result);
+                              _alarmController.playAlarmSound(result);
                             }
                           },
                           child: Row(
@@ -427,13 +421,14 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
                                           color: Colors.black,
                                         ),
                                       ),
-                                      Text(
-                                        _selectedSoundName,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
+                                      Obx(() => Text(
+                                            _alarmController
+                                                .selectedSoundName.value,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.grey,
+                                            ),
+                                          )),
                                     ],
                                   ),
                                 ],

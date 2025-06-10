@@ -17,6 +17,7 @@ import '../../core/services/background_service.dart';
 import '../../models/alarm/alarm_model.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/sound_manager.dart';
+import '../../core/constants/asset_constants.dart';
 import '../nfc/nfc_controller.dart';
 import '../stats/stats_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -43,6 +44,8 @@ class AlarmController extends GetxController {
   final RxInt activeAlarmId = RxInt(-1);
   final RxBool hasActiveAlarm = false.obs;
   final RxBool shouldShowStopScreen = false.obs;
+  final RxInt selectedSoundForNewAlarm = RxInt(1);
+  final RxString selectedSoundName = RxString('Classic Alarm');
 
   late SharedPreferences _prefs;
   Timer? _clockTimer;
@@ -69,7 +72,20 @@ class AlarmController extends GetxController {
       for (final alarm in alarmSet.alarms) {
         debugPrint('Alarm ringing from Alarm package: ${alarm.id}');
         _handleAlarmPackageRinging(alarm.id);
+
+        // IMMEDIATE NAVIGATION: Go directly to stop screen when alarm is detected
+        _navigateToStopScreenImmediately(alarm.id);
       }
+    });
+
+    // Additional check for alarms that are already ringing when the app starts
+    Timer(const Duration(milliseconds: 500), () {
+      _checkForExistingRingingAlarms();
+    });
+
+    // IMMEDIATE CHECK: Check for currently ringing alarms right now
+    Timer(const Duration(milliseconds: 100), () {
+      _checkCurrentlyRingingAlarms();
     });
   }
 
@@ -117,6 +133,138 @@ class AlarmController extends GetxController {
     }
   }
 
+  /// Check for currently ringing alarms immediately (used at app startup)
+  void _checkCurrentlyRingingAlarms() {
+    try {
+      debugPrint('IMMEDIATE CHECK: Looking for currently ringing alarms');
+
+      // Listen to the ringing stream once to check current state
+      final subscription = Alarm.ringing.listen((AlarmSet alarmSet) {
+        if (alarmSet.alarms.isNotEmpty) {
+          debugPrint(
+              'IMMEDIATE CHECK: Found ${alarmSet.alarms.length} ringing alarms');
+          for (final alarm in alarmSet.alarms) {
+            debugPrint('IMMEDIATE CHECK: Processing ringing alarm ${alarm.id}');
+            _handleAlarmPackageRinging(alarm.id);
+            _navigateToStopScreenImmediately(alarm.id);
+            break; // Only handle first alarm
+          }
+        } else {
+          debugPrint('IMMEDIATE CHECK: No currently ringing alarms found');
+        }
+      });
+
+      // Cancel subscription after checking
+      Timer(const Duration(milliseconds: 500), () {
+        subscription.cancel();
+      });
+    } catch (e) {
+      debugPrint('Error in immediate alarm check: $e');
+    }
+  }
+
+  /// Immediately navigate to stop screen when an alarm is detected ringing
+  void _navigateToStopScreenImmediately(int alarmId) {
+    try {
+      // Small delay to ensure app is fully loaded
+      Timer(const Duration(milliseconds: 300), () async {
+        final alarm = getAlarmById(alarmId);
+        if (alarm != null) {
+          final prefs = await SharedPreferences.getInstance();
+          final soundId =
+              prefs.getInt('flutter.active_alarm_sound') ?? alarm.soundId;
+
+          debugPrint(
+              'IMMEDIATE NAVIGATION: Going to stop screen for alarm $alarmId');
+
+          // Force navigation to stop screen regardless of current route
+          Get.offAllNamed(
+            AppConstants.stopAlarm,
+            arguments: {'alarmId': alarmId, 'soundId': soundId},
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('Error in immediate navigation: $e');
+    }
+  }
+
+  /// Check for alarms that are already ringing when the controller initializes
+  /// This handles cases where the app is reopened while an alarm is active
+  Future<void> _checkForExistingRingingAlarms() async {
+    try {
+      debugPrint('Checking for existing ringing alarms on controller init');
+
+      // Check SharedPreferences for stored active alarm info first
+      final prefs = await SharedPreferences.getInstance();
+      final storedActiveAlarmId = prefs.getInt('flutter.active_alarm_id');
+
+      if (storedActiveAlarmId != null && storedActiveAlarmId > 0) {
+        debugPrint('Found stored active alarm ID: $storedActiveAlarmId');
+
+        // Find the corresponding alarm in our system
+        final alarm = getAlarmById(storedActiveAlarmId);
+        if (alarm != null && alarm.isEnabled) {
+          // Check if this alarm should still be ringing
+          final now = DateTime.now();
+
+          // For repeating alarms, check if they should be active based on current time
+          // For one-time alarms, check if they're within a reasonable window (e.g., last 30 minutes)
+          bool shouldBeRinging = false;
+
+          if (alarm.isRepeating) {
+            // Check if the current day/time matches the alarm schedule
+            final currentWeekday = now.weekday == 7
+                ? 0
+                : now.weekday; // Convert Sunday from 7 to 0
+            if (alarm.daysActive.contains(currentWeekday)) {
+              final alarmTime = DateTime(now.year, now.month, now.day,
+                  alarm.time.hour, alarm.time.minute);
+              final timeDiff = now.difference(alarmTime).inMinutes;
+              // If we're within 30 minutes after the alarm time, it should still be ringing
+              shouldBeRinging = timeDiff >= 0 && timeDiff <= 30;
+            }
+          } else {
+            // For one-time alarms, check if it's within 30 minutes of the alarm time
+            final timeDiff = now.difference(alarm.time).inMinutes;
+            shouldBeRinging = timeDiff >= 0 && timeDiff <= 30;
+          }
+
+          if (shouldBeRinging) {
+            debugPrint(
+                'Alarm $storedActiveAlarmId should still be ringing, restoring active state');
+
+            activeAlarmId.value = storedActiveAlarmId;
+            shouldShowStopScreen.value = true;
+            hasActiveAlarm.value = true;
+
+            // Ensure device stays awake
+            _enableAlarmWakeLock();
+
+            debugPrint(
+                'Set shouldShowStopScreen to true for existing alarm: $storedActiveAlarmId');
+          } else {
+            debugPrint(
+                'Stored alarm $storedActiveAlarmId should no longer be ringing, clearing stored data');
+            // Clear stale data
+            await prefs.remove('flutter.active_alarm_id');
+            await prefs.remove('flutter.active_alarm_sound');
+          }
+        } else {
+          debugPrint(
+              'Stored alarm $storedActiveAlarmId not found or disabled, clearing stored data');
+          // Clear stale data for non-existent or disabled alarms
+          await prefs.remove('flutter.active_alarm_id');
+          await prefs.remove('flutter.active_alarm_sound');
+        }
+      } else {
+        debugPrint('No stored active alarm data found');
+      }
+    } catch (e) {
+      debugPrint('Error checking for existing ringing alarms: $e');
+    }
+  }
+
   /// Convert our AlarmModel to Alarm package's AlarmSettings
   AlarmSettings _convertToAlarmSettings(AlarmModel alarm) {
     // Get the proper sound path for the alarm
@@ -137,9 +285,11 @@ class AlarmController extends GetxController {
         dateTime: nextAlarmTime,
         assetAudioPath: soundPath,
         loopAudio: true,
-        vibrate: true,
+        vibrate: false,
         warningNotificationOnKill: Platform.isIOS,
         androidFullScreenIntent: true,
+        // CRITICAL: Prevent alarm from stopping when app is terminated/reopened
+        androidStopAlarmOnTermination: false,
         volumeSettings: VolumeSettings.fade(
           volume: volumeLevel,
           fadeDuration:
@@ -198,6 +348,50 @@ class AlarmController extends GetxController {
       update();
     } catch (e) {
       debugPrint('Alarm creation failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Creates a new alarm without sleep tracking (for reused alarms from history)
+  Future<void> createAlarmWithoutSleepTracking(AlarmModel alarm) async {
+    try {
+      final DateTime now = DateTime.now();
+      if (!alarm.isRepeating && alarm.time.isBefore(now)) {
+        alarm.time = alarm.time.add(const Duration(days: 1));
+        debugPrint('Adjusted alarm time to: ${alarm.time}');
+      }
+
+      // Save to database first (without calling recordAlarmSetTime)
+      final id = await _dbHelper.insertAlarm(alarm);
+      alarm.id = id;
+
+      if (alarm.isEnabled) {
+        // PRIMARY: Use the Flutter Alarm package for when app is running
+        final alarmSettings = _convertToAlarmSettings(alarm);
+        await Alarm.set(alarmSettings: alarmSettings);
+
+        debugPrint(
+            'Alarm scheduled with Flutter Alarm package (no sleep tracking) - ID: $id, Time: ${alarm.getNextAlarmTime().toIso8601String()}');
+
+        // BACKUP: Also schedule with native system for when app is closed
+        try {
+          await AlarmBackgroundService.scheduleExactAlarm(
+              id, alarm.getNextAlarmTime(), alarm.soundId, alarm.nfcRequired);
+          debugPrint('Backup native alarm scheduled for when app is closed');
+        } catch (e) {
+          debugPrint('Error scheduling backup native alarm: $e');
+        }
+      }
+
+      await loadAlarms();
+      refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
+      await _prefs.setInt('last_alarm_id', id);
+
+      debugPrint(
+          'Created reused alarm with ID: $id, time: ${alarm.time}, next trigger: ${alarm.getNextAlarmTime()} (without sleep tracking)');
+      update();
+    } catch (e) {
+      debugPrint('Reused alarm creation failed: $e');
       rethrow;
     }
   }
@@ -396,8 +590,8 @@ class AlarmController extends GetxController {
       await prefs.setInt(
           'snooze_count', (prefs.getInt('snooze_count') ?? 0) + 1);
 
-      // Schedule the snooze alarm
-      await createAlarm(snoozeAlarm);
+      // Schedule the snooze alarm without sleep tracking
+      await createAlarmWithoutSleepTracking(snoozeAlarm);
 
       Get.snackbar(
         'Alarm Snoozed',
@@ -460,37 +654,11 @@ class AlarmController extends GetxController {
   /// Load saved volume from shared preferences
   Future<void> _loadSavedVolume() async {
     try {
-      _prefs = await SharedPreferences.getInstance();
-
-      // Try to load volume from different sources in order of preference
-      int? savedVolume;
-
-      // First try the flutter-specific key
-      savedVolume = _prefs.getInt('flutter.alarm_volume');
-      if (savedVolume == null) {
-        savedVolume = _prefs.getInt('alarm_volume');
-      }
-
-      if (savedVolume != null) {
-        currentAlarmVolume.value =
-            savedVolume.clamp(10, 100); // Minimum 10% for audibility
-        debugPrint(
-            'Loaded saved alarm volume: $savedVolume% -> ${currentAlarmVolume.value}%');
-      } else {
-        // Default to 80% if no saved volume
-        currentAlarmVolume.value = 80;
-        debugPrint(
-            'No saved volume found, using default: ${currentAlarmVolume.value}%');
-      }
-
-      // Ensure volume is saved in all necessary keys for consistency
-      await _prefs.setInt('alarm_volume', currentAlarmVolume.value);
-      await _prefs.setInt('flutter.alarm_volume', currentAlarmVolume.value);
-      await _prefs.setDouble(
-          'alarm_volume_double', currentAlarmVolume.value / 100.0);
+      final savedVolume = _prefs.getInt('alarm_volume') ?? 50;
+      currentAlarmVolume.value = savedVolume;
+      debugPrint('Loaded saved volume: $savedVolume%');
     } catch (e) {
       debugPrint('Error loading saved volume: $e');
-      currentAlarmVolume.value = 80; // Default fallback
     }
   }
 
@@ -511,13 +679,14 @@ class AlarmController extends GetxController {
     });
   }
 
-  /// Initializes required services and dependencies
+  /// Initialize the controller and its dependencies
   Future<void> _initializeController() async {
     try {
       tz.initializeTimeZones();
       _prefs = await SharedPreferences.getInstance();
       await NotificationService.initialize();
       await _preloadSounds();
+      await _loadSelectedSound(); // Load saved sound preference
     } catch (e) {
       debugPrint('Controller Initialization Error: $e');
     }
@@ -694,6 +863,34 @@ class AlarmController extends GetxController {
       }
     } catch (e) {
       debugPrint('Error updating volume: $e');
+    }
+  }
+
+  /// Updates the selected sound for new alarms
+  Future<void> updateSelectedSound(int soundId) async {
+    try {
+      selectedSoundForNewAlarm.value = soundId;
+      selectedSoundName.value = SoundManager.getSoundName(soundId);
+
+      // Save to SharedPreferences
+      await _prefs.setInt('selected_sound_for_new_alarm', soundId);
+      debugPrint(
+          'Updated selected sound to: $soundId (${selectedSoundName.value})');
+    } catch (e) {
+      debugPrint('Error updating selected sound: $e');
+    }
+  }
+
+  /// Loads the saved sound preference from SharedPreferences
+  Future<void> _loadSelectedSound() async {
+    try {
+      final savedSoundId = _prefs.getInt('selected_sound_for_new_alarm') ?? 1;
+      selectedSoundForNewAlarm.value = savedSoundId;
+      selectedSoundName.value = SoundManager.getSoundName(savedSoundId);
+      debugPrint(
+          'Loaded selected sound: $savedSoundId (${selectedSoundName.value})');
+    } catch (e) {
+      debugPrint('Error loading selected sound: $e');
     }
   }
 

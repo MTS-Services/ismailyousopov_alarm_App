@@ -134,42 +134,14 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
   /// Direct method to stop the alarm without NFC verification
   Future<void> _stopAlarm() async {
     try {
-      // FIRST: Stop vibration immediately
-      if (Platform.isAndroid) {
-        try {
-          await const MethodChannel('com.example.alarm/background_channel')
-              .invokeMethod('stopVibration');
-          debugPrint('Vibration stopped immediately in _stopAlarm');
-        } catch (e) {
-          debugPrint('Error stopping vibration immediately: $e');
-        }
-      }
-
-      // First stop the alarm using the Alarm package
-      await Alarm.stop(widget.alarmId);
-
-      // Then stop the background service to ensure native services are stopped
+      // Use the enhanced background service stop method which properly coordinates all stop operations
       await AlarmBackgroundService.stopAlarm();
 
-      // Then stop the alarm sound in Flutter
+      // Stop the alarm sound in Flutter as well
       _alarmController.stopAlarmSound();
 
-      // Then update the database state
+      // Update the database state
       await _alarmController.stopAlarm(widget.alarmId, soundId: widget.soundId);
-
-      // Add a safety delay
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      // Emergency vibration stop as final safety measure
-      await AlarmBackgroundService.emergencyStopVibration();
-
-      // Double-check alarm is actually stopped
-      bool isStillActive = await AlarmBackgroundService.isAlarmActive();
-      if (isStillActive) {
-        // Force emergency stop as backup
-        await AlarmBackgroundService.emergencyStopAllAlarms();
-        debugPrint('Used emergency stop because regular stop failed');
-      }
 
       // Navigate back to home
       Get.offNamed(AppConstants.home);
@@ -198,43 +170,15 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
 
     if (success) {
       try {
-        // FIRST: Stop vibration immediately
-        if (Platform.isAndroid) {
-          try {
-            await const MethodChannel('com.example.alarm/background_channel')
-                .invokeMethod('stopVibration');
-            debugPrint('Vibration stopped immediately in NFC verification');
-          } catch (e) {
-            debugPrint('Error stopping vibration immediately in NFC: $e');
-          }
-        }
-
-        // First stop the alarm using the Alarm package
-        await Alarm.stop(widget.alarmId);
-
-        // Then stop the background service to ensure native services are stopped
+        // Use the enhanced background service stop method which properly coordinates all stop operations
         await AlarmBackgroundService.stopAlarm();
 
-        // Then stop the alarm sound in Flutter
+        // Stop the alarm sound in Flutter as well
         _alarmController.stopAlarmSound();
 
-        // Then update the database state
+        // Update the database state
         await _alarmController.stopAlarm(widget.alarmId,
             soundId: widget.soundId);
-
-        // Add a safety delay
-        await Future.delayed(const Duration(milliseconds: 1000));
-
-        // Emergency vibration stop as final safety measure
-        await AlarmBackgroundService.emergencyStopVibration();
-
-        // Double-check alarm is actually stopped
-        bool isStillActive = await AlarmBackgroundService.isAlarmActive();
-        if (isStillActive) {
-          // Force emergency stop as backup
-          await AlarmBackgroundService.emergencyStopAllAlarms();
-          debugPrint('Used emergency stop because regular stop failed');
-        }
 
         // Navigate back to home
         Get.offNamed(AppConstants.home);
@@ -258,45 +202,15 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
 
     if (_nfcController.verifyBackupCode(code)) {
       try {
-        // FIRST: Stop vibration immediately
-        if (Platform.isAndroid) {
-          try {
-            await const MethodChannel('com.example.alarm/background_channel')
-                .invokeMethod('stopVibration');
-            debugPrint(
-                'Vibration stopped immediately in backup code verification');
-          } catch (e) {
-            debugPrint(
-                'Error stopping vibration immediately in backup code: $e');
-          }
-        }
-
-        // First stop the alarm using the Alarm package
-        await Alarm.stop(widget.alarmId);
-
-        // Then stop the background service to ensure native services are stopped
+        // Use the enhanced background service stop method which properly coordinates all stop operations
         await AlarmBackgroundService.stopAlarm();
 
-        // Then stop the alarm sound in Flutter
+        // Stop the alarm sound in Flutter as well
         _alarmController.stopAlarmSound();
 
-        // Then update the database state
+        // Update the database state
         await _alarmController.stopAlarm(widget.alarmId,
             soundId: widget.soundId);
-
-        // Add a safety delay
-        await Future.delayed(const Duration(milliseconds: 1000));
-
-        // Emergency vibration stop as final safety measure
-        await AlarmBackgroundService.emergencyStopVibration();
-
-        // Double-check alarm is actually stopped
-        bool isStillActive = await AlarmBackgroundService.isAlarmActive();
-        if (isStillActive) {
-          // Force emergency stop as backup
-          await AlarmBackgroundService.emergencyStopAllAlarms();
-          debugPrint('Used emergency stop because regular stop failed');
-        }
 
         // Navigate back to home
         Get.offNamed(AppConstants.home);
@@ -517,28 +431,24 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
                                                       isSmallScreen ? 160 : 220,
                                                 )),
                                           ),
-                                          Align(
-                                            alignment: Alignment.topCenter,
-                                            child: Padding(
-                                              padding: EdgeInsets.only(
-                                                  top: constraints.maxHeight *
-                                                      0.025),
-                                              child: Obx(() => Text(
-                                                    _nfcController
-                                                            .verificationSuccess
-                                                            .value
-                                                        ? 'Success!'
-                                                        : 'Scan to stop',
-                                                    style: GoogleFonts.inter(
-                                                      color: Colors.white,
-                                                      fontSize: isSmallScreen
-                                                          ? 14
-                                                          : 16,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                    ),
-                                                  )),
-                                            ),
+                                          Positioned(
+                                            top: isSmallScreen ? 12 : 16,
+                                            left: 0,
+                                            right: 0,
+                                            child: Obx(() => Text(
+                                                  _nfcController
+                                                          .verificationSuccess
+                                                          .value
+                                                      ? 'Success!'
+                                                      : 'Scan to stop',
+                                                  textAlign: TextAlign.center,
+                                                  style: GoogleFonts.inter(
+                                                    color: Colors.white,
+                                                    fontSize:
+                                                        isSmallScreen ? 12 : 16,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                )),
                                           ),
                                         ],
                                       ),
@@ -746,7 +656,7 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
                                   child: ElevatedButton(
                                     onPressed: _startNfcVerification,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue,
+                                      backgroundColor: Colors.black,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(25),
                                       ),

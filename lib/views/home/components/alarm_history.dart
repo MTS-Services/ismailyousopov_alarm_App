@@ -93,7 +93,8 @@ class _AlarmHistoryWidgetState extends State<AlarmHistoryWidget> {
         isForToday: true,
       );
 
-      await _alarmController.createAlarm(newAlarm);
+      // Use createAlarmWithoutSleepTracking to prevent adding to sleep history
+      await _alarmController.createAlarmWithoutSleepTracking(newAlarm);
       await Future.delayed(const Duration(milliseconds: 300));
 
       await _alarmController.loadAlarms();

@@ -122,6 +122,30 @@ class MainActivity: FlutterActivity() {
                     result.success(true)
                 }
                 
+                "stopAlarmReceiver" -> {
+                    // Explicitly stop the AlarmReceiver to stop vibration and sound
+                    try {
+                        AlarmReceiver.stopAlarm()
+                        Log.d(TAG, "AlarmReceiver stopped successfully")
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error stopping AlarmReceiver", e)
+                        result.success(false)
+                    }
+                }
+                
+                "stopAlarmService" -> {
+                    // Stop the alarm service
+                    try {
+                        stopAlarmService()
+                        Log.d(TAG, "Alarm service stopped successfully")
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error stopping alarm service", e)
+                        result.success(false)
+                    }
+                }
+                
                 "cancelAllNotifications" -> {
                     cancelAllNotifications()
                     result.success(true)

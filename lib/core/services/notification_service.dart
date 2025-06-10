@@ -129,8 +129,7 @@ class NotificationService {
         ],
         color: Colors.red,
         colorized: true,
-        enableVibration: true,
-        vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
+        enableVibration: false,
         enableLights: true,
         ledColor: Colors.red,
         ledOnMs: 1000,
@@ -297,7 +296,7 @@ class NotificationService {
             'Alarm Notifications',
             description: 'Used for alarm notifications',
             importance: Importance.max,
-            enableVibration: true,
+            enableVibration: false,
             enableLights: true,
             ledColor: Colors.red,
             playSound: true, // IMPORTANT: Enable sound
@@ -313,7 +312,7 @@ class NotificationService {
             'Alarm Service',
             description: 'Used for running the alarm service',
             importance: Importance.high,
-            enableVibration: true,
+            enableVibration: false,
             showBadge: true,
           ),
         );
@@ -520,8 +519,7 @@ class NotificationService {
         playSound: false,
         showBadge: true,
         enableLights: true,
-        enableVibration: true,
-        vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
+        enableVibration: false,
         ledColor: const Color.fromARGB(255, 255, 0, 0),
       );
 
@@ -531,9 +529,8 @@ class NotificationService {
         description: 'Used when background service fails',
         importance: Importance.max,
         playSound: false,
-        enableVibration: true,
+        enableVibration: false,
         enableLights: true,
-        vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
         ledColor: const Color.fromARGB(255, 255, 0, 0),
       );
 
@@ -616,9 +613,8 @@ class NotificationService {
           importance: Importance.max,
           playSound: true,
           sound: RawResourceAndroidNotificationSound(androidSoundName),
-          enableVibration: true,
+          enableVibration: false,
           enableLights: true,
-          vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
           ledColor: const Color.fromARGB(255, 255, 0, 0),
         );
 
@@ -989,7 +985,6 @@ class NotificationService {
             ledOffMs: 500,
             sound: RawResourceAndroidNotificationSound(androidSoundName),
             fullScreenIntent: true,
-            vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
             styleInformation: BigTextStyleInformation(
               nfcRequired ? 'Scan NFC Tag to Stop Alarm' : 'Tap to Stop Alarm',
               htmlFormatBigText: true,

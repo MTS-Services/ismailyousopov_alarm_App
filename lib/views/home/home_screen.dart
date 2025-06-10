@@ -11,6 +11,8 @@ import 'components/custom_navigation_bar.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/background_service.dart';
+import 'package:alarm/alarm.dart';
+import 'package:alarm/utils/alarm_set.dart';
 
 /// Main screen displaying current time and next alarm information
 class HomeScreen extends StatefulWidget {
@@ -52,6 +54,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Add a listener to detect active alarms while the app is open
       _setupActiveAlarmListener();
+
+      // Set up a one-time check after app initialization
+      Timer(const Duration(seconds: 1), () async {
+        try {
+          await _performDirectAlarmCheck();
+        } catch (e) {
+          debugPrint('Error in direct alarm check: $e');
+        }
+      });
     });
   }
 
@@ -88,23 +99,96 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Performs a direct check for ringing alarms using the Flutter Alarm package
+  Future<void> _performDirectAlarmCheck() async {
+    try {
+      debugPrint('Performing direct alarm check using Alarm.ringing');
+
+      // Check Alarm.ringing stream for currently active alarms
+      final alarmSubscription = Alarm.ringing.listen((AlarmSet alarmSet) {
+        if (alarmSet.alarms.isNotEmpty) {
+          for (final alarm in alarmSet.alarms) {
+            debugPrint('DIRECT CHECK: Found ringing alarm ${alarm.id}');
+
+            // Navigate immediately to stop screen
+            final currentRoute = Get.currentRoute;
+            final isOnStopScreen =
+                currentRoute.contains(AppConstants.stopAlarm);
+            final isOnNfcScreen = currentRoute.contains(AppConstants.nfcScan);
+
+            if (!isOnStopScreen && !isOnNfcScreen) {
+              debugPrint(
+                  'DIRECT CHECK: Navigating to stop screen for alarm ${alarm.id}');
+              _navigateToStopAlarmScreen(alarm.id, 1); // Default sound ID
+            }
+            break; // Only handle the first alarm
+          }
+        }
+      });
+
+      // Cancel the subscription after a short time
+      Timer(const Duration(seconds: 2), () {
+        alarmSubscription.cancel();
+      });
+    } catch (e) {
+      debugPrint('Error in direct alarm check: $e');
+    }
+  }
+
   /// Checks if there's an active alarm that requires the stop screen
   Future<void> _checkForActiveAlarm() async {
     try {
+      // First check the alarm controller's state
+      final shouldShowStopScreen = alarmController.shouldShowStopScreen.value;
+      final activeAlarmId = alarmController.activeAlarmId.value;
+
+      if (shouldShowStopScreen && activeAlarmId > 0) {
+        debugPrint(
+            'AlarmController indicates stop screen should be shown for alarm: $activeAlarmId');
+
+        final prefs = await SharedPreferences.getInstance();
+        final activeSoundId = prefs.getInt('flutter.active_alarm_sound') ?? 1;
+
+        // Check if we're already on the stop alarm screen or NFC scan screen
+        final currentRoute = Get.currentRoute;
+        final isOnStopScreen = currentRoute.contains(AppConstants.stopAlarm);
+        final isOnNfcScreen = currentRoute.contains(AppConstants.nfcScan);
+
+        if (!isOnStopScreen && !isOnNfcScreen) {
+          debugPrint(
+              'Navigating to stop alarm screen based on AlarmController state');
+          _navigateToStopAlarmScreen(activeAlarmId, activeSoundId);
+          return;
+        }
+      }
+
+      // Fallback: Check background service and SharedPreferences
       final isActive = await AlarmBackgroundService.isAlarmActive();
       if (isActive) {
         final prefs = await SharedPreferences.getInstance();
-        final activeAlarmId = prefs.getInt('flutter.active_alarm_id');
+        final storedActiveAlarmId = prefs.getInt('flutter.active_alarm_id');
         final activeSoundId = prefs.getInt('flutter.active_alarm_sound') ?? 1;
 
-        if (activeAlarmId != null && activeAlarmId > 0) {
+        if (storedActiveAlarmId != null && storedActiveAlarmId > 0) {
+          debugPrint(
+              'Background service indicates active alarm: $storedActiveAlarmId');
+
+          // Update alarm controller state if it's not already set
+          if (alarmController.activeAlarmId.value != storedActiveAlarmId) {
+            alarmController.activeAlarmId.value = storedActiveAlarmId;
+            alarmController.shouldShowStopScreen.value = true;
+            alarmController.hasActiveAlarm.value = true;
+          }
+
           // Check if we're already on the stop alarm screen or NFC scan screen
           final currentRoute = Get.currentRoute;
           final isOnStopScreen = currentRoute.contains(AppConstants.stopAlarm);
           final isOnNfcScreen = currentRoute.contains(AppConstants.nfcScan);
 
           if (!isOnStopScreen && !isOnNfcScreen) {
-            _navigateToStopAlarmScreen(activeAlarmId, activeSoundId);
+            debugPrint(
+                'Navigating to stop alarm screen based on background service state');
+            _navigateToStopAlarmScreen(storedActiveAlarmId, activeSoundId);
           }
         }
       }
@@ -253,80 +337,97 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawer: const CustomDrawer(),
-      body: SafeArea(
-        child: Column(
-          children: [
-            CustomNavigationBar(
-              onMenuTap: () => homeController.openDrawer(context),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 20),
-                      // Clock Widget
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.5),
-                              blurRadius: 15,
-                              spreadRadius: 1,
-                              offset: const Offset(0, 4),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.05, 1.0],
+            colors: [
+              Color(0xFFAF5B73), // Blue for top 10%
+              Color(0xFFF5F5F5), // Light blue transition
+              Color(0xFFF5F5F5), // Light grey for the rest
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              CustomNavigationBar(
+                onMenuTap: () => homeController.openDrawer(context),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 20),
+                        // Clock Widget
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.5),
+                                blurRadius: 15,
+                                spreadRadius: 1,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const ClipRRect(
+                            borderRadius:
+                                BorderRadius.all(Radius.circular(150)),
+                            child: AnalogClock(
+                              size: 300,
+                              backgroundColor: Colors.white,
+                              numberColor: Colors.black,
+                              handColor: Colors.black,
+                              secondHandColor: Colors.red,
                             ),
-                          ],
-                        ),
-                        child: const ClipRRect(
-                          borderRadius: BorderRadius.all(Radius.circular(150)),
-                          child: AnalogClock(
-                            size: 300,
-                            backgroundColor: Colors.white,
-                            numberColor: Colors.black,
-                            handColor: Colors.black,
-                            secondHandColor: Colors.red,
                           ),
                         ),
-                      ),
-                      Obx(() {
-                        final _ = alarmController.alarms.length;
-                        final __ = alarmController.refreshTimestamp.value;
+                        Obx(() {
+                          final _ = alarmController.alarms.length;
+                          final __ = alarmController.refreshTimestamp.value;
 
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          height: _hasActiveAlarms() ? 40 : 60,
-                        );
-                      }),
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            height: _hasActiveAlarms() ? 40 : 60,
+                          );
+                        }),
 
-                      Obx(() {
-                        final _ = alarmController.alarms.length;
-                        final __ = alarmController.refreshTimestamp.value;
+                        Obx(() {
+                          final _ = alarmController.alarms.length;
+                          final __ = alarmController.refreshTimestamp.value;
 
-                        final hasAlarms = _hasActiveAlarms();
-                        return AlarmInfoSection(
-                          alarmTime: hasAlarms ? _getNextAlarmTime() : "",
-                          wakeUpIn: hasAlarms ? _calculateWakeUpTimeText() : "",
-                          onEditAlarms: () =>
-                              Get.toNamed(AppConstants.alarmEdit),
-                          onAddAlarm: () => Get.toNamed(AppConstants.setAlarm),
-                          addButtonAnimation: homeController.addButtonAnimation,
-                          hasActiveAlarms: hasAlarms,
-                        );
-                      }),
-                    ],
+                          final hasAlarms = _hasActiveAlarms();
+                          return AlarmInfoSection(
+                            alarmTime: hasAlarms ? _getNextAlarmTime() : "",
+                            wakeUpIn:
+                                hasAlarms ? _calculateWakeUpTimeText() : "",
+                            onEditAlarms: () =>
+                                Get.toNamed(AppConstants.alarmEdit),
+                            onAddAlarm: () =>
+                                Get.toNamed(AppConstants.setAlarm),
+                            addButtonAnimation:
+                                homeController.addButtonAnimation,
+                            hasActiveAlarms: hasAlarms,
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

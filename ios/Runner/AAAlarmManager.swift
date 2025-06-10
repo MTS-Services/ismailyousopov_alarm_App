@@ -206,7 +206,7 @@ class AlarmManager {
         playAlarmSound(soundId: soundId)
         
         // Start vibration
-        startVibration()
+        // startVibration()
         
         // Update user defaults with active alarm information
         userDefaults.set([

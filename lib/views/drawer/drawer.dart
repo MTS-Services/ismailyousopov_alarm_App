@@ -81,8 +81,20 @@ class CustomDrawer extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: InkWell(
-                        onTap: () {
-                          Get.toNamed(AppConstants.alarmSounds);
+                        onTap: () async {
+                          final result =
+                              await Get.toNamed(AppConstants.alarmSounds);
+                          if (result != null && result is int) {
+                            // Show confirmation that sound was updated
+                            Get.snackbar(
+                              'Sound Updated',
+                              'Default alarm sound has been updated',
+                              backgroundColor: Colors.green[100],
+                              colorText: Colors.black,
+                              snackPosition: SnackPosition.BOTTOM,
+                              duration: const Duration(seconds: 2),
+                            );
+                          }
                         },
                         child: Stack(
                           children: [
@@ -252,8 +264,8 @@ class CustomDrawer extends StatelessWidget {
                 ),
               ),
               onTap: () async {
-                final Uri url = Uri.parse(
-                    'https://earlyuptag.com/policies/privacy-policy');
+                final Uri url =
+                    Uri.parse('https://earlyuptag.com/policies/privacy-policy');
                 try {
                   if (!await launchUrl(
                     url,
@@ -283,8 +295,8 @@ class CustomDrawer extends StatelessWidget {
                 ),
               ),
               onTap: () async {
-                final Uri url = Uri.parse(
-                    'https://earlyuptag.com/pages/contact');
+                final Uri url =
+                    Uri.parse('https://earlyuptag.com/pages/contact');
                 try {
                   if (!await launchUrl(
                     url,

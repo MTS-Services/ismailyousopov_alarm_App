@@ -55,14 +55,46 @@ class AlarmReceiver : BroadcastReceiver() {
 
             Log.d(TAG, "Stopping alarm ID: $activeAlarmId")
 
-            // Cancel safety timeout
-            safetyTimeoutHandler?.removeCallbacksAndMessages(null)
-
-            // Stop vibration refresh
+            // FIRST: Stop vibration refresh immediately to prevent restart
             vibrationHandler?.removeCallbacksAndMessages(null)
             vibrationRunnable = null
+            Log.d(TAG, "Stopped vibration refresh handler")
 
-            // Release media player
+            // SECOND: Cancel safety timeout
+            safetyTimeoutHandler?.removeCallbacksAndMessages(null)
+
+            // THIRD: Stop vibration multiple times with delays
+            try {
+                vibrator?.cancel()
+                Log.d(TAG, "First vibration cancel attempt")
+                
+                // Add a small delay and try again
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        vibrator?.cancel()
+                        Log.d(TAG, "Second vibration cancel attempt")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in second vibration cancel", e)
+                    }
+                }, 100)
+                
+                // One more attempt after another delay
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        vibrator?.cancel()
+                        Log.d(TAG, "Third vibration cancel attempt")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in third vibration cancel", e)
+                    }
+                }, 200)
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping vibration", e)
+            } finally {
+                vibrator = null
+            }
+
+            // FOURTH: Release media player
             try {
                 mediaPlayer?.apply {
                     if (isPlaying) {
@@ -76,7 +108,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 mediaPlayer = null
             }
 
-            // Release audio focus
+            // FIFTH: Release audio focus
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && audioFocusRequest != null) {
                 try {
                     val audioManager = AlarmSoundService.appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -87,16 +119,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 audioFocusRequest = null
             }
 
-            // Stop vibration
-            try {
-                vibrator?.cancel()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping vibration", e)
-            } finally {
-                vibrator = null
-            }
-
-            // Release wake lock
+            // SIXTH: Release wake lock
             try {
                 wakeLock?.apply {
                     if (isHeld) {
@@ -195,7 +218,7 @@ class AlarmReceiver : BroadcastReceiver() {
             startAlarmSoundService(context, alarmId, soundId)
 
             // Vibrate device
-            vibrate(context, alarmId, soundId)
+            // vibrate(context, alarmId, soundId)
 
             // Wake up screen and dismiss keyguard
             wakeUpDevice(context)
@@ -247,7 +270,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     "Alarm Channel",
                     NotificationManager.IMPORTANCE_HIGH)
                 channel.description = "Channel for alarm notifications"
-                channel.enableVibration(true)
+                channel.enableVibration(false)
                 channel.enableLights(true)
                 channel.lightColor = android.graphics.Color.RED
                 channel.lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC

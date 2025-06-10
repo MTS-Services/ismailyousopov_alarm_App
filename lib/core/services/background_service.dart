@@ -94,7 +94,7 @@ class AlarmBackgroundService {
         description: 'Channel for Alarm Service',
         importance: Importance.high,
         playSound: false,
-        enableVibration: true,
+        enableVibration: false,
         enableLights: true,
         ledColor: Color.fromARGB(255, 255, 0, 0),
         showBadge: true,
@@ -628,83 +628,81 @@ class AlarmBackgroundService {
     }
   }
 
-  /// Stops the currently active alarm with improved cleanup
+  /// Stop the alarm service and clean up resources
   static Future<void> stopAlarm() async {
     try {
-      debugPrint('Stopping alarm');
+      debugPrint('Stopping alarm service and all resources');
 
       if (Platform.isAndroid) {
         try {
-          // FIRST: Stop vibration immediately
+          // FIRST: Stop the native alarm receiver which handles vibration
+          await _platform.invokeMethod('stopAlarmReceiver');
+          debugPrint('Stopped native alarm receiver');
+
+          // SECOND: Stop vibration explicitly
           await _platform.invokeMethod('stopVibration');
-          debugPrint('Vibration stopped immediately');
+          debugPrint('Stopped vibration via method channel');
 
-          // Then invoke forceStopService on the native side
-          await _platform.invokeMethod('forceStopService');
-
-          // Small delay to allow native operations to complete
-          await Future.delayed(const Duration(milliseconds: 300));
-
-          // Stop vibration again to be absolutely sure
-          await _platform.invokeMethod('stopVibration');
-
-          // Cancel all notifications
-          await _platform.invokeMethod('cancelAllNotifications');
-
-          // Try a second time to force stop (extra safety)
-          await _platform.invokeMethod('forceStopService');
-
-          debugPrint('Native services explicitly stopped');
+          // THIRD: Stop the alarm service
+          await _platform.invokeMethod('stopAlarmService');
+          debugPrint('Stopped native alarm service');
         } catch (e) {
-          debugPrint('Error stopping native service: $e');
+          debugPrint('Error calling native stop methods: $e');
         }
       }
 
-      if (_fallbackPlayer != null) {
-        try {
-          await _fallbackPlayer!.stop();
-          await _fallbackPlayer!.dispose();
-        } catch (e) {
-          debugPrint('Error stopping fallback player: $e');
-        } finally {
-          _fallbackPlayer = null;
-        }
-      }
-
-      final service = FlutterBackgroundService();
-      if (await service.isRunning()) {
+      // Stop the background service
+      try {
+        final service = FlutterBackgroundService();
         service.invoke('stopAlarm');
-        await Future.delayed(const Duration(milliseconds: 500));
         service.invoke('stopService');
+        debugPrint('Background service stopped');
+      } catch (e) {
+        debugPrint('Error stopping background service: $e');
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('flutter.active_alarm_id');
-      await prefs.remove('flutter.active_alarm_sound');
-      await prefs.remove('flutter.alarm_start_time');
-      await prefs.remove('flutter.using_fallback_alarm');
-      await prefs.remove('flutter.using_native_notification');
+      // Clear the service health check timer
+      _serviceHealthCheckTimer?.cancel();
+      _serviceHealthCheckTimer = null;
 
-      await releaseWakeLock();
-
-      await _flutterLocalNotificationsPlugin.cancelAll();
-      await NotificationService.flutterLocalNotificationsPlugin.cancelAll();
-
-      _activeAlarmId = null;
-      if (Get.isRegistered<AlarmController>()) {
-        final alarmController = Get.find<AlarmController>();
-        alarmController.activeAlarmId.value = -1;
+      // Stop any fallback audio
+      try {
+        await _fallbackPlayer?.stop();
+        _fallbackPlayer = null;
+        debugPrint('Stopped fallback audio player');
+      } catch (e) {
+        debugPrint('Error stopping fallback player: $e');
       }
 
-      await performCompleteCleanup();
+      // Clear active alarm data
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('flutter.active_alarm_id');
+        await prefs.remove('flutter.active_alarm_sound');
+        await prefs.remove('flutter.alarm_start_time');
+        await prefs.remove('flutter.using_fallback_alarm');
+        await prefs.remove('flutter.direct_to_stop');
+        debugPrint('Cleared active alarm data from SharedPreferences');
+      } catch (e) {
+        debugPrint('Error clearing SharedPreferences: $e');
+      }
 
-      debugPrint('Alarm stopped successfully');
+      // Additional safety delay and another vibration stop attempt
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (Platform.isAndroid) {
+        try {
+          await _platform.invokeMethod('stopVibration');
+          debugPrint('Final vibration stop attempt completed');
+        } catch (e) {
+          debugPrint('Error in final vibration stop: $e');
+        }
+      }
+
+      debugPrint('Alarm stop sequence completed');
     } catch (e) {
       debugPrint('Error stopping alarm service: $e');
-
-      try {
-        await emergencyStopAllAlarms();
-      } catch (_) {}
+      // Even if there's an error, try emergency stop
+      await emergencyStopAllAlarms();
     }
   }
 
@@ -855,44 +853,82 @@ class AlarmBackgroundService {
     await startAlarm(alarmId, soundId);
   }
 
-  /// Emergency stop for all alarms
+  /// Emergency stop all alarm-related services and processes
   static Future<void> emergencyStopAllAlarms() async {
     try {
-      debugPrint('EMERGENCY STOP: Stopping all alarms and services');
-
-      if (_fallbackPlayer != null) {
-        try {
-          await _fallbackPlayer!.stop();
-          await _fallbackPlayer!.dispose();
-        } catch (e) {
-          debugPrint('Error stopping fallback player: $e');
-        } finally {
-          _fallbackPlayer = null;
-        }
-      }
-
-      await forceStopService();
-      await NotificationService.flutterLocalNotificationsPlugin.cancelAll();
-      await releaseWakeLock();
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('active_alarm_id');
-      await prefs.remove('active_alarm_sound');
-      await prefs.remove('alarm_start_time');
-      await prefs.remove('using_fallback_alarm');
-
-      if (Get.isRegistered<AlarmController>()) {
-        final alarmController = Get.find<AlarmController>();
-        alarmController.activeAlarmId.value = -1;
-      }
+      debugPrint('EMERGENCY STOP: Stopping all alarm services');
 
       if (Platform.isAndroid) {
         try {
-          await _platform.invokeMethod('forceStopService');
-          await _platform.invokeMethod('stopVibration');
+          // FIRST: Stop the native alarm receiver which manages vibration
+          await _platform.invokeMethod('stopAlarmReceiver');
+          debugPrint('Emergency: Stopped AlarmReceiver');
+
+          // SECOND: Multiple vibration stop attempts
+          for (int i = 0; i < 3; i++) {
+            await _platform.invokeMethod('stopVibration');
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+          debugPrint('Emergency: Stopped vibration (multiple attempts)');
+
+          // THIRD: Stop the alarm service
+          await _platform.invokeMethod('stopAlarmService');
+          debugPrint('Emergency: Stopped alarm service');
+
+          // FOURTH: Cancel all notifications
           await _platform.invokeMethod('cancelAllNotifications');
+          debugPrint('Emergency: Cancelled all notifications');
         } catch (e) {
-          debugPrint('Error stopping native services: $e');
+          debugPrint('Error in emergency native stop: $e');
+        }
+      }
+
+      // Stop Flutter background service
+      try {
+        final service = FlutterBackgroundService();
+        service.invoke('stopAlarm');
+        service.invoke('stopService');
+        debugPrint('Emergency: Stopped Flutter background service');
+      } catch (e) {
+        debugPrint('Error stopping Flutter service: $e');
+      }
+
+      // Stop audio player
+      try {
+        await _fallbackPlayer?.stop();
+        _fallbackPlayer = null;
+        debugPrint('Emergency: Stopped audio player');
+      } catch (e) {
+        debugPrint('Error stopping audio player: $e');
+      }
+
+      // Clear shared preferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('flutter.active_alarm_id');
+        await prefs.remove('flutter.active_alarm_sound');
+        await prefs.remove('flutter.alarm_start_time');
+        await prefs.remove('flutter.using_fallback_alarm');
+        await prefs.remove('flutter.direct_to_stop');
+        debugPrint('Emergency: Cleared SharedPreferences');
+      } catch (e) {
+        debugPrint('Error clearing SharedPreferences: $e');
+      }
+
+      // Cancel timers
+      _serviceCleanupTimer?.cancel();
+      _serviceHealthCheckTimer?.cancel();
+      _serviceCleanupTimer = null;
+      _serviceHealthCheckTimer = null;
+
+      // One final vibration stop attempt after a delay
+      if (Platform.isAndroid) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        try {
+          await _platform.invokeMethod('stopVibration');
+          debugPrint('Emergency: Final vibration stop attempt');
+        } catch (e) {
+          debugPrint('Error in final vibration stop: $e');
         }
       }
 
@@ -972,8 +1008,8 @@ class AlarmBackgroundService {
           ],
           color: Colors.red,
           colorized: true,
-          enableVibration: true,
-          vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
+          enableVibration: false,
+          // vibrationPattern: Int64List.fromList([0, 500, 500, 500]),
           enableLights: true,
           ledColor: Colors.red,
           ledOnMs: 1000,
