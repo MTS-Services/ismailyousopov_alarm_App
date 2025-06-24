@@ -129,273 +129,294 @@ class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
       child: Scaffold(
         key: scaffoldKey,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: SafeArea(
-          top: true,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: verticalSpacing,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InkWell(
-                    splashColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () {
-                      Get.back();
-                    },
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: Colors.black,
-                      size: iconSize,
-                    ),
-                  ),
-                  SizedBox(height: verticalSpacing),
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.asset(
-                        'assets/images/buy_nfc.png',
-                        width: screenWidth * 0.85,
-                        height: screenWidth * 0.43,
-                        fit: BoxFit.cover,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.05, 1.0],
+              colors: [
+                Color(0xFFAF5B73), // Blue for top 10%
+                Color(0xFFF5F5F5), // Light blue transition
+                Color(0xFFF5F5F5), // Light grey for the rest
+              ],
+            ),
+          ),
+          child: SafeArea(
+            top: true,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: verticalSpacing,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      splashColor: Colors.transparent,
+                      focusColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      onTap: () {
+                        Get.back();
+                      },
+                      child: Icon(
+                        Icons.arrow_back,
+                        color: Colors.black,
+                        size: iconSize,
                       ),
                     ),
-                  ),
-                  SizedBox(height: verticalSpacing * 0.5),
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    SizedBox(height: verticalSpacing),
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          'assets/images/buy_nfc.png',
+                          width: screenWidth * 0.85,
+                          height: screenWidth * 0.43,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
+                    SizedBox(height: verticalSpacing * 0.5),
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Padding(
-                        padding: EdgeInsets.all(screenWidth * 0.05),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.max,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.max,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Buy NFC tag',
-                                        style: GoogleFonts.interTight(
-                                            color: Colors.black,
-                                            fontSize: titleFontSize,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                      Text(
-                                        'Buy our official NFC tags',
-                                        style: GoogleFonts.inter(
-                                            color: Colors.black,
-                                            fontWeight: FontWeight.w400,
-                                            fontSize: isSmallScreen ? 12 : 14),
-                                      ),
-                                    ],
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(screenWidth * 0.05),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.max,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.max,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.max,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Buy NFC tag',
+                                          style: GoogleFonts.interTight(
+                                              color: Colors.black,
+                                              fontSize: titleFontSize,
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                        Text(
+                                          'Buy our official NFC tags',
+                                          style: GoogleFonts.inter(
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.w400,
+                                              fontSize:
+                                                  isSmallScreen ? 12 : 14),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                SizedBox(width: screenWidth * 0.03),
-                                Container(
-                                  width: screenWidth * 0.14,
-                                  height: screenWidth * 0.14,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(30),
+                                  SizedBox(width: screenWidth * 0.03),
+                                  Container(
+                                    width: screenWidth * 0.14,
+                                    height: screenWidth * 0.14,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                    child: Icon(
+                                      Icons.attach_money,
+                                      color: Colors.black,
+                                      size: screenWidth * 0.08,
+                                    ),
                                   ),
-                                  child: Icon(
-                                    Icons.attach_money,
-                                    color: Colors.black,
-                                    size: screenWidth * 0.08,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: verticalSpacing),
-                            SizedBox(
-                              height: 60,
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  final Uri url = Uri.parse(
-                                      'https://earlyuptag.com/products/the-early-up%E2%84%A2-nfc-tag');
-                                  try {
-                                    if (!await launchUrl(
-                                      url,
-                                      mode: LaunchMode.externalApplication,
-                                    )) {
-                                      throw Exception('Could not launch $url');
+                                ],
+                              ),
+                              SizedBox(height: verticalSpacing),
+                              SizedBox(
+                                height: 60,
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    final Uri url = Uri.parse(
+                                        'https://earlyuptag.com/products/the-early-up%E2%84%A2-nfc-tag');
+                                    try {
+                                      if (!await launchUrl(
+                                        url,
+                                        mode: LaunchMode.externalApplication,
+                                      )) {
+                                        throw Exception(
+                                            'Could not launch $url');
+                                      }
+                                    } catch (e) {
+                                      if (kDebugMode) {
+                                        print('Error launching URL: $e');
+                                      }
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Could not open the store page'),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
                                     }
-                                  } catch (e) {
-                                    if (kDebugMode) {
-                                      print('Error launching URL: $e');
-                                    }
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Could not open the store page'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.black,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(25),
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.black,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(25),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 16),
                                   ),
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 12, horizontal: 16),
-                                ),
-                                child: Text(
-                                  'Purchase',
-                                  style: GoogleFonts.interTight(
-                                    color: Colors.white,
-                                    fontSize: isSmallScreen ? 14 : 16,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
+                                  child: Text(
+                                    'Purchase',
+                                    style: GoogleFonts.interTight(
+                                      color: Colors.white,
+                                      fontSize: isSmallScreen ? 14 : 16,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: verticalSpacing),
-                  Obx(() => Card(
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                    SizedBox(height: verticalSpacing),
+                    Obx(() => Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Padding(
-                            padding: EdgeInsets.all(screenWidth * 0.05),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.max,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.max,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _nfcController
-                                                    .hasRegisteredNfcTag.value
-                                                ? 'Remove NFC tag'
-                                                : 'Add NFC tag',
-                                            style: GoogleFonts.interTight(
-                                                color: Colors.black,
-                                                fontSize: titleFontSize,
-                                                fontWeight: FontWeight.w600),
-                                          ),
-                                          Text(
-                                            _nfcController
-                                                    .hasRegisteredNfcTag.value
-                                                ? 'Delete existing NFC tag'
-                                                : 'Add new NFC tag',
-                                            style: GoogleFonts.inter(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.w400,
-                                                fontSize:
-                                                    isSmallScreen ? 12 : 14),
-                                          ),
-                                        ],
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Padding(
+                              padding: EdgeInsets.all(screenWidth * 0.05),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.max,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.max,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              _nfcController
+                                                      .hasRegisteredNfcTag.value
+                                                  ? 'Remove NFC tag'
+                                                  : 'Add NFC tag',
+                                              style: GoogleFonts.interTight(
+                                                  color: Colors.black,
+                                                  fontSize: titleFontSize,
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                            Text(
+                                              _nfcController
+                                                      .hasRegisteredNfcTag.value
+                                                  ? 'Delete existing NFC tag'
+                                                  : 'Add new NFC tag',
+                                              style: GoogleFonts.inter(
+                                                  color: Colors.black,
+                                                  fontWeight: FontWeight.w400,
+                                                  fontSize:
+                                                      isSmallScreen ? 12 : 14),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(width: screenWidth * 0.03),
-                                    Container(
-                                      width: screenWidth * 0.12,
-                                      height: screenWidth * 0.12,
-                                      decoration: BoxDecoration(
-                                        color: _nfcController
+                                      SizedBox(width: screenWidth * 0.03),
+                                      Container(
+                                        width: screenWidth * 0.12,
+                                        height: screenWidth * 0.12,
+                                        decoration: BoxDecoration(
+                                          color: _nfcController
+                                                  .hasRegisteredNfcTag.value
+                                              ? Theme.of(context).primaryColor
+                                              : const Color(0xFFFFDE59),
+                                          borderRadius:
+                                              BorderRadius.circular(30),
+                                        ),
+                                        child: Icon(
+                                          _nfcController
+                                                  .hasRegisteredNfcTag.value
+                                              ? Icons.remove_circle
+                                              : Icons.add_circle,
+                                          color: _nfcController
+                                                  .hasRegisteredNfcTag.value
+                                              ? Colors.white
+                                              : Colors.black,
+                                          size: screenWidth * 0.07,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: verticalSpacing),
+                                  SizedBox(
+                                    height: 60,
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: _handleNfcAction,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _nfcController
                                                 .hasRegisteredNfcTag.value
                                             ? Theme.of(context).primaryColor
                                             : const Color(0xFFFFDE59),
-                                        borderRadius: BorderRadius.circular(30),
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(25),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12, horizontal: 16),
                                       ),
-                                      child: Icon(
+                                      child: Text(
                                         _nfcController.hasRegisteredNfcTag.value
-                                            ? Icons.remove_circle
-                                            : Icons.add_circle,
-                                        color: _nfcController
-                                                .hasRegisteredNfcTag.value
-                                            ? Colors.white
-                                            : Colors.black,
-                                        size: screenWidth * 0.07,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: verticalSpacing),
-                                SizedBox(
-                                  height: 60,
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _handleNfcAction,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _nfcController
-                                              .hasRegisteredNfcTag.value
-                                          ? Theme.of(context).primaryColor
-                                          : const Color(0xFFFFDE59),
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(25),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12, horizontal: 16),
-                                    ),
-                                    child: Text(
-                                      _nfcController.hasRegisteredNfcTag.value
-                                          ? 'Remove'
-                                          : 'Add NFC',
-                                      style: GoogleFonts.interTight(
-                                        color: _nfcController
-                                                .hasRegisteredNfcTag.value
-                                            ? Colors.white
-                                            : Colors.black87,
-                                        fontSize: isSmallScreen ? 14 : 16,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.5,
+                                            ? 'Remove'
+                                            : 'Add NFC',
+                                        style: GoogleFonts.interTight(
+                                          color: _nfcController
+                                                  .hasRegisteredNfcTag.value
+                                              ? Colors.white
+                                              : Colors.black87,
+                                          fontSize: isSmallScreen ? 14 : 16,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.5,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      )),
-                ],
+                        )),
+                  ],
+                ),
               ),
             ),
           ),

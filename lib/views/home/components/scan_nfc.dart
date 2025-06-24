@@ -46,7 +46,7 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
   Future<void> _checkExistingTag() async {
     // Check if any NFC tag is registered system-wide
     await _nfcController.checkIfNfcRegistered();
-    
+
     if (_nfcController.hasRegisteredNfcTag.value) {
       setState(() {
         _isAlreadyRegistered = true;
@@ -107,213 +107,227 @@ class _AddNFCWidgetState extends State<AddNFCWidget>
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              _nfcController.stopNfcScan();
-              Get.back();
-            },
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.05, 1.0],
+            colors: [
+              Color(0xFFAF5B73), // Blue for top 10%
+              Color(0xFFF5F5F5), // Light blue transition
+              Color(0xFFF5F5F5), // Light grey for the rest
+            ],
           ),
-          title: Text(
-            _isAlreadyRegistered ? 'NFC Tag Registered' : 'Register NFC Tag',
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          centerTitle: true,
         ),
-        body: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // NFC icon container
-                      Stack(
-                        children: [
-                          Container(
-                            width: 224,
-                            height: 300,
-                            decoration: BoxDecoration(
-                              color: _registrationSuccess
-                                  ? Colors.green
-                                  : Colors.white,
-                              boxShadow: const [
-                                BoxShadow(
-                                  blurRadius: 4,
-                                  color: Color(0xFF040000),
-                                  offset: Offset(0, 2),
-                                )
-                              ],
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Stack(
-                              children: [
-                                Align(
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    _registrationSuccess
-                                        ? Icons.check_circle_outline
-                                        : Icons.nfc_rounded,
-                                    color: _registrationSuccess
-                                        ? Colors.white
-                                        : Colors.black,
-                                    size: 220,
-                                  ),
-                                ),
-                                Align(
-                                  alignment: Alignment.topCenter,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(top: 22),
-                                    child: Text(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                _nfcController.stopNfcScan();
+                Get.back();
+              },
+            ),
+            title: Text(
+              _isAlreadyRegistered ? 'NFC Tag Registered' : 'Register NFC Tag',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            centerTitle: true,
+          ),
+          body: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // NFC icon container
+                        Stack(
+                          children: [
+                            Container(
+                              width: 224,
+                              height: 300,
+                              decoration: BoxDecoration(
+                                color: _registrationSuccess
+                                    ? Colors.green
+                                    : Colors.white,
+                                boxShadow: const [
+                                  BoxShadow(
+                                    blurRadius: 4,
+                                    color: Color(0xFF040000),
+                                    offset: Offset(0, 2),
+                                  )
+                                ],
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Stack(
+                                children: [
+                                  Align(
+                                    alignment: Alignment.center,
+                                    child: Icon(
                                       _registrationSuccess
-                                          ? _isAlreadyRegistered
-                                              ? 'NFC Tag Already Registered!'
-                                              : 'Tag Registered!'
-                                          : 'Ready to scan',
-                                      style: GoogleFonts.inter(
-                                        color: _registrationSuccess
-                                            ? Colors.white
-                                            : Colors.black,
-                                        fontWeight: FontWeight.w800,
+                                          ? Icons.check_circle_outline
+                                          : Icons.nfc_rounded,
+                                      color: _registrationSuccess
+                                          ? Colors.white
+                                          : Colors.black,
+                                      size: 220,
+                                    ),
+                                  ),
+                                  Align(
+                                    alignment: Alignment.topCenter,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(top: 22),
+                                      child: Text(
+                                        _registrationSuccess
+                                            ? _isAlreadyRegistered
+                                                ? 'NFC Tag Already Registered!'
+                                                : 'Tag Registered!'
+                                            : 'Ready to scan',
+                                        style: GoogleFonts.inter(
+                                          color: _registrationSuccess
+                                              ? Colors.white
+                                              : Colors.black,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          if (!_registrationSuccess)
-                            Positioned.fill(
-                              child: AnimatedBuilder(
-                                animation: _shimmerController,
-                                builder: (context, child) {
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(20),
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                        colors: const [
-                                          Colors.transparent,
-                                          Colors.black12,
-                                          Colors.black26,
-                                          Colors.black12,
-                                          Colors.transparent,
-                                        ],
-                                        stops: [
-                                          0.0,
-                                          _shimmerController.value - 0.2,
-                                          _shimmerController.value,
-                                          _shimmerController.value + 0.2,
-                                          1.0,
-                                        ],
+                            if (!_registrationSuccess)
+                              Positioned.fill(
+                                child: AnimatedBuilder(
+                                  animation: _shimmerController,
+                                  builder: (context, child) {
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(20),
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: const [
+                                            Colors.transparent,
+                                            Colors.black12,
+                                            Colors.black26,
+                                            Colors.black12,
+                                            Colors.transparent,
+                                          ],
+                                          stops: [
+                                            0.0,
+                                            _shimmerController.value - 0.2,
+                                            _shimmerController.value,
+                                            _shimmerController.value + 0.2,
+                                            1.0,
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                        ],
-                      ),
+                          ],
+                        ),
 
-                      Padding(
-                        padding: const EdgeInsets.only(top: 22),
-                        child: Container(
-                          width: 300,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _showError ? Colors.red : Colors.black,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 15, left: 5, top: 5, bottom: 5),
-                              child: Text(
-                                _showError
-                                    ? _errorMessage
-                                    : _registrationSuccess
-                                        ? _isAlreadyRegistered
-                                            ? 'An NFC tag is already registered'
-                                            : 'NFC tag registered successfully!'
-                                        : 'Hold your device near the NFC tag to register',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                  color:
-                                      Colors.white,
-                                  fontSize: 15,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 22),
+                          child: Container(
+                            width: 300,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _showError ? Colors.red : Colors.black,
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                    right: 15, left: 5, top: 5, bottom: 5),
+                                child: Text(
+                                  _showError
+                                      ? _errorMessage
+                                      : _registrationSuccess
+                                          ? _isAlreadyRegistered
+                                              ? 'An NFC tag is already registered'
+                                              : 'NFC tag registered successfully!'
+                                          : 'Hold your device near the NFC tag to register',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
 
-                      if (_showError)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 20),
-                          child: ElevatedButton(
-                            onPressed: _startNfcRegistration,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).primaryColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(25),
+                        if (_showError)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 20),
+                            child: ElevatedButton(
+                              onPressed: _startNfcRegistration,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(25),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 50, vertical: 15),
                               ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 50, vertical: 15),
-                            ),
-                            child: Text(
-                              'Try Again',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                              child: Text(
+                                'Try Again',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      
-                      // if (_isAlreadyRegistered)
-                      //   Padding(
-                      //     padding: const EdgeInsets.only(top: 20),
-                      //     child: ElevatedButton(
-                      //       onPressed: () {
-                      //         _nfcController.stopNfcScan();
-                      //         Get.back();
-                      //       },
-                      //       style: ElevatedButton.styleFrom(
-                      //         backgroundColor: Colors.blue,
-                      //         shape: RoundedRectangleBorder(
-                      //           borderRadius: BorderRadius.circular(25),
-                      //         ),
-                      //         padding: const EdgeInsets.symmetric(
-                      //             horizontal: 30, vertical: 15),
-                      //       ),
-                      //       child: Text(
-                      //         'OK',
-                      //         style: GoogleFonts.inter(
-                      //           color: Colors.white,
-                      //           fontSize: 16,
-                      //           fontWeight: FontWeight.w600,
-                      //         ),
-                      //       ),
-                      //     ),
-                      //   ),
-                    ],
+
+                        // if (_isAlreadyRegistered)
+                        //   Padding(
+                        //     padding: const EdgeInsets.only(top: 20),
+                        //     child: ElevatedButton(
+                        //       onPressed: () {
+                        //         _nfcController.stopNfcScan();
+                        //         Get.back();
+                        //       },
+                        //       style: ElevatedButton.styleFrom(
+                        //         backgroundColor: Colors.blue,
+                        //         shape: RoundedRectangleBorder(
+                        //           borderRadius: BorderRadius.circular(25),
+                        //         ),
+                        //         padding: const EdgeInsets.symmetric(
+                        //             horizontal: 30, vertical: 15),
+                        //       ),
+                        //       child: Text(
+                        //         'OK',
+                        //         style: GoogleFonts.inter(
+                        //           color: Colors.white,
+                        //           fontSize: 16,
+                        //           fontWeight: FontWeight.w600,
+                        //         ),
+                        //       ),
+                        //     ),
+                        //   ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

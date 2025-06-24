@@ -197,13 +197,13 @@ class NFCController extends GetxController {
       // First, check if the tag contains 'earlyup' data
       if (tagToVerify != null) {
         final data = _readNfcData(tagToVerify);
-        // if (data != 'earlyup') {
-        //   Get.snackbar(
-        //       'Invalid Tag', 'This tag does not contain the required data',
-        //       snackPosition: SnackPosition.BOTTOM,
-        //       backgroundColor: Colors.red[100]);
-        //   return false;
-        // }
+        if (data != 'earlyup') {
+          Get.snackbar(
+              'Invalid Tag', 'This tag does not contain the required data',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red[100]);
+          return false;
+        }
       }
 
       // Then check if the ID matches the registered tag
@@ -282,7 +282,7 @@ class NFCController extends GetxController {
             final data = _readNfcData(tag);
 
             // Check if the tag contains 'earlyup' data
-            // if (data == 'earlyup') {
+            if (data == 'earlyup') {
               // Tag contains correct data, proceed with registration
               await saveTagForAlarm(id, alarmId);
 
@@ -301,30 +301,30 @@ class NFCController extends GetxController {
                     snackPosition: SnackPosition.BOTTOM);
                 completer.complete(true);
               }
-            // } else {
-            //   // Tag does not contain 'earlyup' data
-            //   try {
-            //     await NfcManager.instance.stopSession();
-            //   } catch (stopError) {
-            //     // Get.snackbar(
-            //     //     'NFC Warning', 'Error stopping NFC session: $stopError',
-            //     //     snackPosition: SnackPosition.BOTTOM);
-            //     debugPrint('Error stopping NFC session: $stopError');
-            //   }
-            //
-            //   isScanning.value = false;
-            //   Get.snackbar(
-            //     'Invalid NFC Tag',
-            //     'This tag does not a valid EarlyUp NFC tag.',
-            //     snackPosition: SnackPosition.BOTTOM,
-            //     backgroundColor: Colors.grey[800],
-            //     duration: const Duration(seconds: 5),
-            //   );
-            //
-            //   if (!completer.isCompleted) {
-            //     completer.complete(false);
-            //   }
-            // }
+            } else {
+              // Tag does not contain 'earlyup' data
+              try {
+                await NfcManager.instance.stopSession();
+              } catch (stopError) {
+                // Get.snackbar(
+                //     'NFC Warning', 'Error stopping NFC session: $stopError',
+                //     snackPosition: SnackPosition.BOTTOM);
+                debugPrint('Error stopping NFC session: $stopError');
+              }
+
+              isScanning.value = false;
+              Get.snackbar(
+                'Invalid NFC Tag',
+                'This tag does not a valid EarlyUp NFC tag.',
+                snackPosition: SnackPosition.BOTTOM,
+                backgroundColor: Colors.grey[800],
+                duration: const Duration(seconds: 5),
+              );
+
+              if (!completer.isCompleted) {
+                completer.complete(false);
+              }
+            }
           } catch (e) {
             // Get.snackbar('Error', 'Failed to register tag: $e',
             //     snackPosition: SnackPosition.BOTTOM);

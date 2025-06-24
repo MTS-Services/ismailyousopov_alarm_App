@@ -175,35 +175,49 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          automaticallyImplyLeading: false,
-          leading: IconButton(
-            icon: Icon(
-              Icons.arrow_back_rounded,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-              size: 35,
-            ),
-            onPressed: () => Get.toNamed(AppConstants.home),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.05, 1.0],
+            colors: [
+              Color(0xFFAF5B73), // Blue for top 10%
+              Color(0xFFF5F5F5), // Light blue transition
+              Color(0xFFF5F5F5), // Light grey for the rest
+            ],
           ),
-          title: Text(
-            'Edit Alarms',
-            style: GoogleFonts.interTight(
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          titleSpacing: 0,
-          elevation: 0,
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: _buildBodyContent(),
+        child: Scaffold(
+          key: scaffoldKey,
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            automaticallyImplyLeading: false,
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+                size: 35,
+              ),
+              onPressed: () => Get.toNamed(AppConstants.home),
+            ),
+            title: Text(
+              'Edit Alarms',
+              style: GoogleFonts.interTight(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            titleSpacing: 0,
+            elevation: 0,
+          ),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _buildBodyContent(),
+            ),
           ),
         ),
       ),

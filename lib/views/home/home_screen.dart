@@ -345,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
             end: Alignment.bottomCenter,
             stops: [0.0, 0.05, 1.0],
             colors: [
-              Color(0xFFAF5B73), // Blue for top 10%
+              Color(0xFFAF5B73), // red for top 10%
               Color(0xFFF5F5F5), // Light blue transition
               Color(0xFFF5F5F5), // Light grey for the rest
             ],

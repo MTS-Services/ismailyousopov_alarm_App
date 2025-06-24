@@ -192,386 +192,405 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, size: 30),
-            onPressed: () {
-              _alarmController.stopAlarmSound();
-              Get.back();
-            },
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.05, 1.0],
+            colors: [
+              Color(0xFFAF5B73), // Blue for top 10%
+              Color(0xFFF5F5F5), // Light blue transition
+              Color(0xFFF5F5F5), // Light grey for the rest
+            ],
           ),
-          title: Text(
-            _isEditing ? 'Edit Alarm' : 'Set Alarm',
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          centerTitle: true,
         ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 20),
-                  Container(
-                    width: 300,
-                    height: 300,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 10,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          height: 200,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Hour Picker
-                              SizedBox(
-                                width: 70,
-                                child: CupertinoPicker(
-                                  magnification: 1.2,
-                                  squeeze: 1.2,
-                                  useMagnifier: true,
-                                  itemExtent: 40,
-                                  looping: false,
-                                  onSelectedItemChanged: (int index) {
-                                    setState(() {
-                                      _selectedDateTime = DateTime(
-                                        _selectedDateTime.year,
-                                        _selectedDateTime.month,
-                                        _selectedDateTime.day,
-                                        index,
-                                        _selectedDateTime.minute,
-                                      );
-                                    });
-                                  },
-                                  scrollController: FixedExtentScrollController(
-                                    initialItem: _selectedDateTime.hour,
-                                  ),
-                                  children: List<Widget>.generate(
-                                    24,
-                                    (int index) {
-                                      return Center(
-                                        child: Text(
-                                          index.toString().padLeft(2, '0'),
-                                          style: const TextStyle(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-
-                              const Text(
-                                ":",
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                              ),
-
-                              // Minute Picker
-                              SizedBox(
-                                width: 70,
-                                child: CupertinoPicker(
-                                  magnification: 1.2,
-                                  squeeze: 1.2,
-                                  useMagnifier: true,
-                                  itemExtent: 40,
-                                  looping: true,
-                                  onSelectedItemChanged: (int index) {
-                                    setState(() {
-                                      _selectedDateTime = DateTime(
-                                        _selectedDateTime.year,
-                                        _selectedDateTime.month,
-                                        _selectedDateTime.day,
-                                        _selectedDateTime.hour,
-                                        index,
-                                      );
-                                    });
-                                  },
-                                  scrollController: FixedExtentScrollController(
-                                    initialItem: _selectedDateTime.minute,
-                                  ),
-                                  children: List<Widget>.generate(
-                                    60,
-                                    (int index) {
-                                      return Center(
-                                        child: Text(
-                                          index.toString().padLeft(2, '0'),
-                                          style: const TextStyle(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
+        child: Scaffold(
+          key: scaffoldKey,
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, size: 30),
+              onPressed: () {
+                _alarmController.stopAlarmSound();
+                Get.back();
+              },
+            ),
+            title: Text(
+              _isEditing ? 'Edit Alarm' : 'Set Alarm',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            centerTitle: true,
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 20),
+                    Container(
+                      width: 300,
+                      height: 300,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            spreadRadius: 5,
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 200,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.nfc,
-                                  color: Theme.of(context).primaryColor,
-                                  size: 24,
+                                // Hour Picker
+                                SizedBox(
+                                  width: 70,
+                                  child: CupertinoPicker(
+                                    magnification: 1.2,
+                                    squeeze: 1.2,
+                                    useMagnifier: true,
+                                    itemExtent: 40,
+                                    looping: false,
+                                    onSelectedItemChanged: (int index) {
+                                      setState(() {
+                                        _selectedDateTime = DateTime(
+                                          _selectedDateTime.year,
+                                          _selectedDateTime.month,
+                                          _selectedDateTime.day,
+                                          index,
+                                          _selectedDateTime.minute,
+                                        );
+                                      });
+                                    },
+                                    scrollController:
+                                        FixedExtentScrollController(
+                                      initialItem: _selectedDateTime.hour,
+                                    ),
+                                    children: List<Widget>.generate(
+                                      24,
+                                      (int index) {
+                                        return Center(
+                                          child: Text(
+                                            index.toString().padLeft(2, '0'),
+                                            style: const TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'NFC to Stop',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 16,
+
+                                const Text(
+                                  ":",
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
                                     color: Colors.black,
+                                  ),
+                                ),
+
+                                // Minute Picker
+                                SizedBox(
+                                  width: 70,
+                                  child: CupertinoPicker(
+                                    magnification: 1.2,
+                                    squeeze: 1.2,
+                                    useMagnifier: true,
+                                    itemExtent: 40,
+                                    looping: true,
+                                    onSelectedItemChanged: (int index) {
+                                      setState(() {
+                                        _selectedDateTime = DateTime(
+                                          _selectedDateTime.year,
+                                          _selectedDateTime.month,
+                                          _selectedDateTime.day,
+                                          _selectedDateTime.hour,
+                                          index,
+                                        );
+                                      });
+                                    },
+                                    scrollController:
+                                        FixedExtentScrollController(
+                                      initialItem: _selectedDateTime.minute,
+                                    ),
+                                    children: List<Widget>.generate(
+                                      60,
+                                      (int index) {
+                                        return Center(
+                                          child: Text(
+                                            index.toString().padLeft(2, '0'),
+                                            style: const TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                            Switch(
-                              value: _nfcEnabled,
-                              onChanged: _handleNfcSwitch,
-                              activeColor: Colors.white,
-                              activeTrackColor: Colors.black,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        // Sound Selection
-                        InkWell(
-                          onTap: () async {
-                            _alarmController.stopAlarmSound();
-                            final result = await Get.toNamed(
-                              AppConstants.alarmSounds,
-                              arguments: _alarmController
-                                  .selectedSoundForNewAlarm.value,
-                            );
-                            if (result != null) {
-                              _alarmController.updateSelectedSound(result);
-                              _alarmController.playAlarmSound(result);
-                            }
-                          },
-                          child: Row(
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 children: [
                                   Icon(
-                                    Icons.music_note,
+                                    Icons.nfc,
                                     color: Theme.of(context).primaryColor,
                                     size: 24,
                                   ),
                                   const SizedBox(width: 12),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Alarm Sound',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 16,
-                                          color: Colors.black,
-                                        ),
-                                      ),
-                                      Obx(() => Text(
-                                            _alarmController
-                                                .selectedSoundName.value,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12,
-                                              color: Colors.grey,
-                                            ),
-                                          )),
-                                    ],
+                                  Text(
+                                    'NFC to Stop',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      color: Colors.black,
+                                    ),
                                   ),
                                 ],
                               ),
-                              const Icon(
-                                Icons.chevron_right,
-                                color: Colors.grey,
-                                size: 24,
+                              Switch(
+                                value: _nfcEnabled,
+                                onChanged: _handleNfcSwitch,
+                                activeColor: Colors.white,
+                                activeTrackColor: Colors.black,
                               ),
                             ],
                           ),
-                        ),
-
-                        // Volume Control
-                        const SizedBox(height: 20),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                          const SizedBox(height: 20),
+                          // Sound Selection
+                          InkWell(
+                            onTap: () async {
+                              _alarmController.stopAlarmSound();
+                              final result = await Get.toNamed(
+                                AppConstants.alarmSounds,
+                                arguments: _alarmController
+                                    .selectedSoundForNewAlarm.value,
+                              );
+                              if (result != null) {
+                                _alarmController.updateSelectedSound(result);
+                                _alarmController.playAlarmSound(result);
+                              }
+                            },
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  'Volume',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 16,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                                Obx(() => Text(
-                                      '${_alarmController.currentAlarmVolume.value}%',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.black,
-                                      ),
-                                    )),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                IconButton(
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                  icon: const Icon(
-                                    Icons.volume_mute,
-                                    color: Colors.black,
-                                  ),
-                                  onPressed: () {
-                                    _alarmController.updateAlarmVolume(0);
-                                  },
-                                ),
-                                Expanded(
-                                  child: Obx(() => SliderTheme(
-                                        data: SliderThemeData(
-                                          thumbColor: Colors.black,
-                                          activeTrackColor: Colors.black,
-                                          inactiveTrackColor: Colors.grey[300],
-                                          trackHeight: 4.0,
-                                          thumbShape:
-                                              const RoundSliderThumbShape(
-                                            enabledThumbRadius: 8.0,
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.music_note,
+                                      color: Theme.of(context).primaryColor,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Alarm Sound',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 16,
+                                            color: Colors.black,
                                           ),
                                         ),
-                                        child: Slider(
-                                          value: _alarmController
-                                              .currentAlarmVolume.value
-                                              .toDouble(),
-                                          min: 0,
-                                          max: 100,
-                                          onChanged: (value) {
-                                            _alarmController.updateAlarmVolume(
-                                                value.round());
-                                          },
-                                        ),
-                                      )),
+                                        Obx(() => Text(
+                                              _alarmController
+                                                  .selectedSoundName.value,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                              ),
+                                            )),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                                IconButton(
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                  icon: const Icon(
-                                    Icons.volume_up,
-                                    color: Colors.black,
-                                  ),
-                                  onPressed: () {
-                                    _alarmController.updateAlarmVolume(100);
-                                  },
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.grey,
+                                  size: 24,
                                 ),
                               ],
                             ),
-                          ],
+                          ),
+
+                          // Volume Control
+                          const SizedBox(height: 20),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Volume',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                  Obx(() => Text(
+                                        '${_alarmController.currentAlarmVolume.value}%',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.black,
+                                        ),
+                                      )),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(
+                                      Icons.volume_mute,
+                                      color: Colors.black,
+                                    ),
+                                    onPressed: () {
+                                      _alarmController.updateAlarmVolume(0);
+                                    },
+                                  ),
+                                  Expanded(
+                                    child: Obx(() => SliderTheme(
+                                          data: SliderThemeData(
+                                            thumbColor: Colors.black,
+                                            activeTrackColor: Colors.black,
+                                            inactiveTrackColor:
+                                                Colors.grey[300],
+                                            trackHeight: 4.0,
+                                            thumbShape:
+                                                const RoundSliderThumbShape(
+                                              enabledThumbRadius: 8.0,
+                                            ),
+                                          ),
+                                          child: Slider(
+                                            value: _alarmController
+                                                .currentAlarmVolume.value
+                                                .toDouble(),
+                                            min: 0,
+                                            max: 100,
+                                            onChanged: (value) {
+                                              _alarmController
+                                                  .updateAlarmVolume(
+                                                      value.round());
+                                            },
+                                          ),
+                                        )),
+                                  ),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(
+                                      Icons.volume_up,
+                                      color: Colors.black,
+                                    ),
+                                    onPressed: () {
+                                      _alarmController.updateAlarmVolume(100);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    // Action Buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () {
+                            _alarmController.stopAlarmSound();
+                            Get.back();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).primaryColor,
+                            fixedSize: const Size(150, 50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: _saveAlarm,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            fixedSize: const Size(150, 50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                              side: const BorderSide(color: Colors.black),
+                            ),
+                          ),
+                          child: Text(
+                            _isEditing ? 'Update' : 'Save',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 40),
-                  // Action Buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () {
-                          _alarmController.stopAlarmSound();
-                          Get.back();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          fixedSize: const Size(150, 50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                        ),
-                        child: Text(
-                          'Cancel',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: _saveAlarm,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          fixedSize: const Size(150, 50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
-                            side: const BorderSide(color: Colors.black),
-                          ),
-                        ),
-                        child: Text(
-                          _isEditing ? 'Update' : 'Save',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

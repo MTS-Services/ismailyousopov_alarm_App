@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -12,7 +13,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:alarm/alarm.dart';
 import '../../controllers/alarm/alarm_controller.dart';
+import '../../models/alarm/alarm_model.dart';
 import 'notification_service.dart';
 import 'sound_manager.dart';
 import 'dart:typed_data';
@@ -858,24 +861,27 @@ class AlarmBackgroundService {
     try {
       debugPrint('EMERGENCY STOP: Stopping all alarm services');
 
+      // FIRST: Clear all stored alarm data to prevent random triggers
+      await clearAllStoredAlarmData();
+
       if (Platform.isAndroid) {
         try {
-          // FIRST: Stop the native alarm receiver which manages vibration
+          // SECOND: Stop the native alarm receiver which manages vibration
           await _platform.invokeMethod('stopAlarmReceiver');
           debugPrint('Emergency: Stopped AlarmReceiver');
 
-          // SECOND: Multiple vibration stop attempts
+          // THIRD: Multiple vibration stop attempts
           for (int i = 0; i < 3; i++) {
             await _platform.invokeMethod('stopVibration');
             await Future.delayed(const Duration(milliseconds: 100));
           }
           debugPrint('Emergency: Stopped vibration (multiple attempts)');
 
-          // THIRD: Stop the alarm service
+          // FOURTH: Stop the alarm service
           await _platform.invokeMethod('stopAlarmService');
           debugPrint('Emergency: Stopped alarm service');
 
-          // FOURTH: Cancel all notifications
+          // FIFTH: Cancel all notifications
           await _platform.invokeMethod('cancelAllNotifications');
           debugPrint('Emergency: Cancelled all notifications');
         } catch (e) {
@@ -902,19 +908,6 @@ class AlarmBackgroundService {
         debugPrint('Error stopping audio player: $e');
       }
 
-      // Clear shared preferences
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('flutter.active_alarm_id');
-        await prefs.remove('flutter.active_alarm_sound');
-        await prefs.remove('flutter.alarm_start_time');
-        await prefs.remove('flutter.using_fallback_alarm');
-        await prefs.remove('flutter.direct_to_stop');
-        debugPrint('Emergency: Cleared SharedPreferences');
-      } catch (e) {
-        debugPrint('Error clearing SharedPreferences: $e');
-      }
-
       // Cancel timers
       _serviceCleanupTimer?.cancel();
       _serviceHealthCheckTimer?.cancel();
@@ -935,6 +928,37 @@ class AlarmBackgroundService {
       debugPrint('Emergency stop completed');
     } catch (e) {
       debugPrint('Error in emergency stop: $e');
+    }
+  }
+
+  /// Clear all stored alarm data to prevent random triggers
+  static Future<void> clearAllStoredAlarmData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Remove all active alarm data
+      await prefs.remove('flutter.active_alarm_id');
+      await prefs.remove('flutter.active_alarm_sound');
+      await prefs.remove('flutter.alarm_start_time');
+      await prefs.remove('flutter.using_fallback_alarm');
+      await prefs.remove('flutter.direct_to_stop');
+      await prefs.remove('flutter.using_native_notification');
+      await prefs.remove('flutter.notification_handler');
+
+      // Clear all scheduled alarms
+      await prefs.remove('scheduled_alarms');
+
+      // Clear alarm trigger timestamps to prevent duplicate triggers
+      final keys = prefs.getKeys();
+      for (final key in keys) {
+        if (key.startsWith('alarm_last_trigger_')) {
+          await prefs.remove(key);
+        }
+      }
+
+      debugPrint('Emergency: Cleared all stored alarm data');
+    } catch (e) {
+      debugPrint('Error clearing stored alarm data: $e');
     }
   }
 
@@ -1457,7 +1481,6 @@ class AlarmBackgroundService {
   }
 
   /// Recover active alarms on app restart
-
   static Future<void> recoverActiveAlarmsOnRestart() async {
     try {
       debugPrint('Checking for active alarms to recover on app restart');
@@ -1475,34 +1498,73 @@ class AlarmBackgroundService {
 
         final alarmAge = DateTime.now().millisecondsSinceEpoch - startTime;
 
-        if (alarmAge < 30 * 60 * 1000) {
-          final alarmController = Get.find<AlarmController>();
-          final alarm = alarmController.getAlarmById(activeAlarmId);
+        // Reduced time window from 30 minutes to 5 minutes to prevent stale alarms
+        if (alarmAge < 5 * 60 * 1000) {
+          // 5 minutes instead of 30 minutes
+          // Additional validation: Check if alarm actually exists and is enabled
+          if (Get.isRegistered<AlarmController>()) {
+            final alarmController = Get.find<AlarmController>();
+            final alarm = alarmController.getAlarmById(activeAlarmId);
 
-          if (alarm != null && alarm.isEnabled) {
-            debugPrint('Recovering active alarm: $activeAlarmId');
+            if (alarm != null && alarm.isEnabled) {
+              // ADDITIONAL CHECK: Verify the alarm time is reasonable for the current context
+              final now = DateTime.now();
+              bool shouldStillBeActive = false;
 
-            final service = FlutterBackgroundService();
-            if (!(await service.isRunning())) {
-              await forceStartAlarmIfNeeded(activeAlarmId, activeAlarmSound);
+              if (alarm.isRepeating) {
+                // For repeating alarms, check if current day/time matches
+                final currentWeekday = now.weekday.toString();
+                if (alarm.daysActive.contains(currentWeekday)) {
+                  final alarmTime = DateTime(now.year, now.month, now.day,
+                      alarm.time.hour, alarm.time.minute);
+                  final timeDiff = now.difference(alarmTime).inMinutes;
+                  // Only active if within 5 minutes of alarm time
+                  shouldStillBeActive = timeDiff >= 0 && timeDiff <= 5;
+                }
+              } else {
+                // For one-time alarms, check if it's within 5 minutes of the alarm time
+                final timeDiff = now.difference(alarm.time).inMinutes;
+                shouldStillBeActive = timeDiff >= 0 && timeDiff <= 5;
+              }
+
+              if (shouldStillBeActive) {
+                debugPrint('Recovering active alarm: $activeAlarmId');
+
+                final service = FlutterBackgroundService();
+                if (!(await service.isRunning())) {
+                  await forceStartAlarmIfNeeded(
+                      activeAlarmId, activeAlarmSound);
+                }
+              } else {
+                debugPrint(
+                    'Alarm $activeAlarmId should no longer be active based on time validation, cleaning up');
+                await clearAllStoredAlarmData();
+              }
+            } else {
+              debugPrint('Alarm no longer exists or is disabled, cleaning up');
+              await clearAllStoredAlarmData();
             }
           } else {
-            debugPrint('Alarm no longer exists or is disabled, cleaning up');
-            await forceStopService();
+            debugPrint(
+                'AlarmController not available, cleaning up stored data');
+            await clearAllStoredAlarmData();
           }
         } else {
           debugPrint(
               'Found stale alarm data (${alarmAge / 60000} minutes old), cleaning up');
-          await forceStopService();
+          await clearAllStoredAlarmData();
         }
       } else {
         debugPrint('No active alarm data found');
       }
 
+      // Enhanced validation for missed alarms and corruption cleanup
       await _checkForMissedAlarms();
       await fixCorruptedScheduledAlarms();
     } catch (e) {
       debugPrint('Error recovering alarms: $e');
+      // On any error, clear potentially corrupted data
+      await clearAllStoredAlarmData();
     }
   }
 
@@ -1535,7 +1597,6 @@ class AlarmBackgroundService {
   }
 
   /// Check for missed alarms
-
   static Future<void> _checkForMissedAlarms() async {
     try {
       debugPrint('Checking for missed alarms');
@@ -1565,6 +1626,10 @@ class AlarmBackgroundService {
           debugPrint(
               'Checking ${alarms.length} scheduled alarms for missed alarms');
 
+          // Validate each alarm before potentially triggering it
+          List<String> validAlarms = [];
+          bool foundMissedAlarm = false;
+
           for (final alarmInfo in alarms) {
             final parts = alarmInfo.split(':');
             if (parts.length >= 3) {
@@ -1572,32 +1637,93 @@ class AlarmBackgroundService {
               final soundId = int.tryParse(parts[1]) ?? 1;
               final scheduledTime = int.tryParse(parts[2]) ?? 0;
 
+              // Check if this is a recent missed alarm (within 5 minutes, not 5 minutes)
               if (id != -1 &&
                   scheduledTime < now &&
                   scheduledTime > now - (5 * 60 * 1000)) {
+                // 5 minutes instead of 5 minutes
                 debugPrint(
-                    'Found missed alarm: $id scheduled for ${DateTime.fromMillisecondsSinceEpoch(scheduledTime)}');
+                    'Found potential missed alarm: $id scheduled for ${DateTime.fromMillisecondsSinceEpoch(scheduledTime)}');
 
-                final alarmController = Get.find<AlarmController>();
-                final alarm = alarmController.getAlarmById(id);
+                // ENHANCED VALIDATION: Check if alarm actually exists and is enabled
+                if (Get.isRegistered<AlarmController>()) {
+                  final alarmController = Get.find<AlarmController>();
+                  final alarm = alarmController.getAlarmById(id);
 
-                if (alarm != null && alarm.isEnabled) {
-                  debugPrint('Triggering missed alarm: $id');
+                  if (alarm != null && alarm.isEnabled) {
+                    // Additional time validation - ensure the missed alarm makes sense
+                    final scheduledDateTime =
+                        DateTime.fromMillisecondsSinceEpoch(scheduledTime);
+                    final currentTime = DateTime.now();
 
-                  await forceStartAlarmIfNeeded(id, soundId);
+                    bool isValidMissedAlarm = false;
 
-                  break;
+                    if (alarm.isRepeating) {
+                      // For repeating alarms, check if the day matches
+                      final scheduledWeekday =
+                          scheduledDateTime.weekday.toString();
+                      if (alarm.daysActive.contains(scheduledWeekday)) {
+                        final timeDiff =
+                            currentTime.difference(scheduledDateTime).inMinutes;
+                        isValidMissedAlarm = timeDiff >= 0 && timeDiff <= 5;
+                      }
+                    } else {
+                      // For one-time alarms, check if the time makes sense
+                      final timeDiff =
+                          currentTime.difference(alarm.time).inMinutes;
+                      isValidMissedAlarm = timeDiff >= 0 && timeDiff <= 5;
+                    }
+
+                    if (isValidMissedAlarm && !foundMissedAlarm) {
+                      debugPrint('Triggering validated missed alarm: $id');
+                      await forceStartAlarmIfNeeded(id, soundId);
+                      foundMissedAlarm =
+                          true; // Only trigger one missed alarm at a time
+                    } else {
+                      debugPrint(
+                          'Missed alarm $id failed validation, removing from schedule');
+                    }
+                  } else {
+                    debugPrint(
+                        'Missed alarm $id no longer exists or is disabled, removing from schedule');
+                  }
+                } else {
+                  debugPrint(
+                      'AlarmController not available, cannot validate missed alarm $id');
                 }
+              } else if (scheduledTime > now) {
+                // Keep future alarms
+                validAlarms.add(alarmInfo);
+              } else {
+                debugPrint(
+                    'Removing expired alarm: $id (older than 5 minutes)');
               }
+            }
+          }
+
+          // Update stored alarms to only include valid ones
+          if (validAlarms.length != alarms.length) {
+            if (validAlarms.isEmpty) {
+              await prefs.remove('scheduled_alarms');
+              debugPrint('Removed all invalid scheduled alarms');
+            } else {
+              await prefs.setString(
+                  'scheduled_alarms', json.encode(validAlarms));
+              debugPrint(
+                  'Updated scheduled alarms, removed ${alarms.length - validAlarms.length} invalid entries');
             }
           }
         } catch (e) {
           debugPrint('Error parsing scheduled alarms JSON: $e');
+          // Clear corrupted data
           await prefs.remove('scheduled_alarms');
         }
       }
     } catch (e) {
       debugPrint('Error checking for missed alarms: $e');
+      // On error, clear potentially corrupted data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('scheduled_alarms');
     }
   }
 
@@ -1823,6 +1949,46 @@ class AlarmBackgroundService {
       }
     } catch (e) {
       debugPrint('Error in emergency vibration stop: $e');
+    }
+  }
+
+  /// Public method to clean up all alarm data - call this to fix random alarm issues
+  static Future<void> resetAlarmSystem() async {
+    try {
+      debugPrint(
+          'RESETTING ALARM SYSTEM: Clearing all data and stopping services');
+
+      // Stop all active alarms first
+      await emergencyStopAllAlarms();
+
+      // Cancel all Flutter Alarm package alarms
+      try {
+        await Alarm.stopAll();
+        debugPrint('Stopped all Flutter Alarm package alarms');
+      } catch (e) {
+        debugPrint('Error stopping Flutter alarms: $e');
+      }
+
+      // Cancel all Android native alarms
+      if (Platform.isAndroid) {
+        try {
+          // Cancel all scheduled alarms through native channel
+          await _alarmManagerChannel.invokeMethod('cancelAllAlarms');
+          debugPrint('Cancelled all native Android alarms');
+        } catch (e) {
+          debugPrint('Error cancelling native alarms: $e');
+        }
+      }
+
+      // Clear all stored data
+      await clearAllStoredAlarmData();
+
+      // Reinitialize the notification service
+      await NotificationService.initialize();
+
+      debugPrint('ALARM SYSTEM RESET COMPLETED');
+    } catch (e) {
+      debugPrint('Error resetting alarm system: $e');
     }
   }
 }

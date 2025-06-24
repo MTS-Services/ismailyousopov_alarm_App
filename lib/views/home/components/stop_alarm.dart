@@ -1,15 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
-import 'package:alarm/alarm.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
 import '../../../controllers/nfc/nfc_controller.dart';
 import '../../../core/services/background_service.dart';
 import '../../../core/constants/asset_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';
 
 class AlarmStopScreen extends StatefulWidget {
   final int alarmId;
@@ -353,7 +350,7 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  nfcRequired.value
+                  Obx(() => nfcRequired.value
                       ? Padding(
                           padding: EdgeInsets.only(
                             left: constraints.maxWidth * 0.06,
@@ -382,10 +379,11 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
                             ),
                           ),
                         )
-                      : const SizedBox(),
+                      : const SizedBox()),
                   Expanded(
                     child: Center(
                       child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -428,27 +426,42 @@ class _AlarmStopWidgetState extends State<AlarmStopScreen>
                                                       : Icons.nfc_rounded,
                                                   color: Colors.white,
                                                   size:
-                                                      isSmallScreen ? 160 : 220,
+                                                      isSmallScreen ? 120 : 200,
                                                 )),
                                           ),
                                           Positioned(
-                                            top: isSmallScreen ? 12 : 16,
+                                            top: isSmallScreen ? 20 : 16,
                                             left: 0,
                                             right: 0,
-                                            child: Obx(() => Text(
-                                                  _nfcController
-                                                          .verificationSuccess
-                                                          .value
-                                                      ? 'Success!'
-                                                      : 'Scan to stop',
-                                                  textAlign: TextAlign.center,
-                                                  style: GoogleFonts.inter(
-                                                    color: Colors.white,
-                                                    fontSize:
-                                                        isSmallScreen ? 12 : 16,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                )),
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: isSmallScreen ? 4 : 6,
+                                              ),
+                                              child: Obx(() => Text(
+                                                    _nfcController
+                                                            .verificationSuccess
+                                                            .value
+                                                        ? 'Success!'
+                                                        : 'Scan to stop',
+                                                    textAlign: TextAlign.center,
+                                                    style: GoogleFonts.inter(
+                                                      color: Colors.white,
+                                                      fontSize: isSmallScreen
+                                                          ? 14
+                                                          : 16,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      shadows: [
+                                                        Shadow(
+                                                          color: Colors.black54,
+                                                          offset: Offset(1, 1),
+                                                          blurRadius: 2,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  )),
+                                            ),
                                           ),
                                         ],
                                       ),

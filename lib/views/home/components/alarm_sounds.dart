@@ -120,106 +120,64 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
       child: Scaffold(
         key: scaffoldKey,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: SafeArea(
-          top: true,
-          child: Stack(
-            children: [
-              SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: MediaQuery.of(context).size.width,
-                      height: MediaQuery.of(context).size.height,
-                      margin: const EdgeInsets.all(16),
-                      child: Stack(
-                        children: [
-                          ...List.generate(
-                            bubbleConfigs.length,
-                            (index) => _buildGradientBubble(
-                              context: context,
-                              index: index,
-                              alignment: bubbleConfigs[index]['alignment'],
-                              size: bubbleConfigs[index]['size'],
-                              colors: [
-                                bubbleConfigs[index]['colors'][0] ??
-                                    Theme.of(context).primaryColor,
-                                bubbleConfigs[index]['colors'][1] ??
-                                    Theme.of(context).cardColor,
-                              ],
-                            ),
-                          ),
-                          Align(
-                            alignment: const Alignment(-0.01, -0.95),
-                            child: Material(
-                              color: Colors.transparent,
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(21),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.05, 1.0],
+              colors: [
+                Color(0xFFAF5B73), // Blue for top 10%
+                Color(0xFFF5F5F5), // Light blue transition
+                Color(0xFFF5F5F5), // Light grey for the rest
+              ],
+            ),
+          ),
+          child: SafeArea(
+            top: true,
+            child: Stack(
+              children: [
+                SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: MediaQuery.of(context).size.width,
+                        height: MediaQuery.of(context).size.height,
+                        margin: const EdgeInsets.all(16),
+                        child: Stack(
+                          children: [
+                            ...List.generate(
+                              bubbleConfigs.length,
+                              (index) => _buildGradientBubble(
+                                context: context,
+                                index: index,
+                                alignment: bubbleConfigs[index]['alignment'],
+                                size: bubbleConfigs[index]['size'],
+                                colors: [
+                                  bubbleConfigs[index]['colors'][0] ??
+                                      Theme.of(context).primaryColor,
+                                  bubbleConfigs[index]['colors'][1] ??
+                                      Theme.of(context).cardColor,
+                                ],
                               ),
-                              child: Container(
-                                width: 205,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF020202),
+                            ),
+                            Align(
+                              alignment: const Alignment(-0.01, -0.95),
+                              child: Material(
+                                color: Colors.transparent,
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(21),
-                                  border: Border.all(
-                                    color: Theme.of(context)
-                                            .textTheme
-                                            .bodyLarge
-                                            ?.color ??
-                                        Colors.white,
-                                  ),
                                 ),
-                                child: const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.only(
-                                        left: 0, right: 0, top: 0, bottom: 0),
-                                    child: Text(
-                                      'Press any bubble',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Align(
-                            alignment: const Alignment(0, 1),
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(48, 0, 48, 150),
-                              child: ElevatedButton(
-                                onPressed: selectedBubbleIndex != null
-                                    ? () {
-                                        final selectedSoundId =
-                                            bubbleConfigs[selectedBubbleIndex!]
-                                                ['soundId'];
-                                        if (kDebugMode) {
-                                          print(
-                                              'Selected sound ID: $selectedSoundId');
-                                        }
-
-                                        _alarmController.stopAlarmSound();
-
-                                        // Update the controller's persistent sound selection
-                                        _alarmController.updateSelectedSound(
-                                            selectedSoundId);
-
-                                        Navigator.of(context)
-                                            .pop(selectedSoundId);
-                                      }
-                                    : null,
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size(200, 50),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(25),
-                                    side: BorderSide(
+                                child: Container(
+                                  width: 205,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF020202),
+                                    borderRadius: BorderRadius.circular(21),
+                                    border: Border.all(
                                       color: Theme.of(context)
                                               .textTheme
                                               .bodyLarge
@@ -227,35 +185,90 @@ class _AlarmSoundsWidgetState extends State<AlarmSoundsWidget> {
                                           Colors.white,
                                     ),
                                   ),
-                                ),
-                                child: const Text(
-                                  'Select',
-                                  style: TextStyle(color: Colors.white),
+                                  child: const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                          left: 0, right: 0, top: 0, bottom: 0),
+                                      child: Text(
+                                        'Press any bubble',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                            Align(
+                              alignment: const Alignment(0, 1),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(48, 0, 48, 150),
+                                child: ElevatedButton(
+                                  onPressed: selectedBubbleIndex != null
+                                      ? () {
+                                          final selectedSoundId = bubbleConfigs[
+                                              selectedBubbleIndex!]['soundId'];
+                                          if (kDebugMode) {
+                                            print(
+                                                'Selected sound ID: $selectedSoundId');
+                                          }
+
+                                          _alarmController.stopAlarmSound();
+
+                                          // Update the controller's persistent sound selection
+                                          _alarmController.updateSelectedSound(
+                                              selectedSoundId);
+
+                                          Navigator.of(context)
+                                              .pop(selectedSoundId);
+                                        }
+                                      : null,
+                                  style: ElevatedButton.styleFrom(
+                                    minimumSize: const Size(200, 50),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(25),
+                                      side: BorderSide(
+                                        color: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.color ??
+                                            Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Select',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 22, top: 35),
-                child: IconButton(
-                  icon: Icon(
-                    Icons.arrow_back,
-                    color: Theme.of(context).textTheme.bodyLarge?.color,
-                    size: 35,
+                    ],
                   ),
-                  onPressed: () {
-                    _alarmController.stopAlarmSound();
-                    Get.back();
-                  },
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.only(left: 22, top: 35),
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                      size: 35,
+                    ),
+                    onPressed: () {
+                      _alarmController.stopAlarmSound();
+                      Get.back();
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
