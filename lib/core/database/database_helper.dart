@@ -61,6 +61,8 @@ class DatabaseHelper {
   Future<int> insertAlarm(AlarmModel alarm) async {
     try {
       final db = await database;
+      print("from db helper: ${alarm.time}");
+      print("from db helper alarmID: ${alarm.id}");
       return await db.insert(
         'alarms',
         alarm.toMap(),
@@ -93,6 +95,9 @@ class DatabaseHelper {
         throw Exception('Cannot update alarm without an ID');
       }
 
+      print("from db helper--alarmID: ${alarm.id}");
+      print("from db helper--alarmTime: ${alarm.time}");
+
       final db = await database;
       return await db.update(
         'alarms',
@@ -109,6 +114,7 @@ class DatabaseHelper {
   /// Deletes an alarm by its ID
   Future<int> deleteAlarm(int id) async {
     try {
+      print("from db helper deletedAlarm alarmID: $id");
       final db = await database;
       return await db.delete(
         'alarms',
@@ -135,20 +141,29 @@ class DatabaseHelper {
 
       final formattedDate =
           '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      debugPrint(
-          'Attempting to insert/update sleep history for date: $formattedDate');
+      
+      debugPrint('💾 SLEEP HISTORY INSERT:');
+      debugPrint('   Date: $formattedDate');
+      debugPrint('   Sleep Time: ${sleepTime.toIso8601String()}');
+      debugPrint('   Wake Time: ${wakeTime.toIso8601String()}');
+      debugPrint('   Total Hours: $totalHours');
+      debugPrint('   Alarm Count: $alarmCount');
+      debugPrint('   Total Alarm Duration: $totalAlarmDuration minutes');
+      
+      // Check for existing records for this date
       final existingRecords = await db.query(
         'sleep_history',
         where: 'date LIKE ?',
         whereArgs: ['$formattedDate%'],
       );
 
-      debugPrint(
-          'Found ${existingRecords.length} existing records for this date');
-      debugPrint(
-          'Inserting totalHours: $totalHours, totalAlarmDuration: $totalAlarmDuration');
+      debugPrint('🔍 EXISTING RECORDS: ${existingRecords.length}');
 
       if (existingRecords.isNotEmpty) {
+        // Update existing record with new data
+        final record = existingRecords.first;
+        debugPrint('🔄 UPDATING EXISTING RECORD ID: ${record['id']}');
+        
         await db.update(
           'sleep_history',
           {
@@ -157,38 +172,32 @@ class DatabaseHelper {
             'total_hours': totalHours,
             'alarm_count': alarmCount,
             'total_alarm_duration': totalAlarmDuration,
+            'updated_at': DateTime.now().toIso8601String(),
           },
           where: 'id = ?',
-          whereArgs: [existingRecords.first['id']],
+          whereArgs: [record['id']],
         );
+        
+        debugPrint('✅ SLEEP HISTORY UPDATED');
       } else {
-        await db.insert(
-          'sleep_history',
-          {
-            'date': date.toIso8601String(),
-            'sleep_time': sleepTime.toIso8601String(),
-            'wake_time': wakeTime.toIso8601String(),
-            'total_hours': totalHours,
-            'alarm_count': alarmCount,
-            'total_alarm_duration': totalAlarmDuration,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-
-        final verifyRecords = await db.query(
-          'sleep_history',
-          where: 'date LIKE ?',
-          whereArgs: ['$formattedDate%'],
-        );
-        debugPrint(
-            'After insert/update, found ${verifyRecords.length} records for date: $formattedDate');
-        if (verifyRecords.isNotEmpty) {
-          debugPrint('Record data: ${verifyRecords.first}');
-        }
+        // Insert new record
+        debugPrint('➕ INSERTING NEW RECORD');
+        
+        await db.insert('sleep_history', {
+          'date': formattedDate,
+          'sleep_time': sleepTime.toIso8601String(),
+          'wake_time': wakeTime.toIso8601String(),
+          'total_hours': totalHours,
+          'alarm_count': alarmCount,
+          'total_alarm_duration': totalAlarmDuration,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+        
+        debugPrint('✅ SLEEP HISTORY INSERTED');
       }
     } catch (e) {
-      debugPrint('Error inserting sleep history: $e');
-      debugPrint('Stack trace: ${StackTrace.current}');
+      debugPrint('❌ Error inserting sleep history: $e');
       rethrow;
     }
   }
@@ -249,22 +258,27 @@ class DatabaseHelper {
 
       if (setTime != null) {
         updates['last_set_time'] = setTime.toIso8601String();
+        debugPrint('🔧 DATABASE: Updating alarm $alarmId set time to: ${setTime.toIso8601String()}');
       }
 
       if (stopTime != null) {
         updates['last_stop_time'] = stopTime.toIso8601String();
+        debugPrint('🔧 DATABASE: Updating alarm $alarmId stop time to: ${stopTime.toIso8601String()}');
       }
 
       if (updates.isEmpty) return 0;
 
-      return await db.update(
+      final result = await db.update(
         'alarms',
         updates,
         where: 'id = ?',
         whereArgs: [alarmId],
       );
+      
+      debugPrint('🔧 DATABASE: Updated $result rows for alarm $alarmId');
+      return result;
     } catch (e) {
-      debugPrint('Error updating alarm times: $e');
+      debugPrint('❌ Error updating alarm times: $e');
       return 0;
     }
   }
@@ -292,6 +306,19 @@ class DatabaseHelper {
       );
     } catch (e) {
       debugPrint('Error deleting sleep history record: $e');
+      return 0;
+    }
+  }
+
+  /// Deletes all sleep history records from database
+  Future<int> clearAllSleepHistory() async {
+    try {
+      final db = await database;
+      final result = await db.delete('sleep_history');
+      debugPrint('✅ Deleted all sleep history records from database: $result records');
+      return result;
+    } catch (e) {
+      debugPrint('❌ Error clearing all sleep history: $e');
       return 0;
     }
   }

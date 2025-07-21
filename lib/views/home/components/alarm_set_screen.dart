@@ -5,9 +5,11 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
 import '../../../controllers/nfc/nfc_controller.dart';
+import '../../../controllers/stats/stats_controller.dart';
 import '../../../models/alarm/alarm_model.dart';
 import '../../../core/constants/asset_constants.dart';
-import '../../../core/services/sound_manager.dart';
+import '../../../core/shared_preferences/sleep_history_prefs.dart';
+
 
 class AlarmSetScreen extends StatefulWidget {
   const AlarmSetScreen({super.key});
@@ -43,6 +45,9 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
     super.dispose();
   }
 
+
+
+
   /// save alarm
   Future<void> _saveAlarm() async {
     _alarmController.stopAlarmSound();
@@ -54,6 +59,7 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
       _selectedDateTime.hour,
       _selectedDateTime.minute,
     );
+
 
     if (selectedDateTime.isBefore(now) &&
         (_editingAlarm == null || _editingAlarm!.daysActive.isEmpty)) {
@@ -71,6 +77,11 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
       );
 
       await _alarmController.updateAlarm(updatedAlarm);
+      
+      // 🔄 AUTOMATIC SHAREDPREFS UPDATE: Update alarm data in SharedPreferences
+      debugPrint('🔄 Updating alarm data in SharedPreferences after edit...');
+      await _alarmController.recordAlarmSetTime(updatedAlarm);
+      
     } else {
       final newAlarm = AlarmModel(
         time: selectedDateTime,
@@ -81,10 +92,64 @@ class _AlarmSetScreenState extends State<AlarmSetScreen> {
       );
 
       await _alarmController.createAlarm(newAlarm);
+      
+      // 🔄 AUTOMATIC SHAREDPREFS SAVE: Save alarm data to SharedPreferences
+      debugPrint('🔄 Saving new alarm data to SharedPreferences...');
+      await _alarmController.recordAlarmSetTime(newAlarm);
+      
+      // 🔄 AUTOMATIC SLEEP HISTORY: Create initial sleep history entry
+      debugPrint('🔄 Creating initial sleep history entry...');
+      final today = DateTime(now.year, now.month, now.day);
+      await _createInitialSleepHistoryEntry(today, now);
     }
 
     Get.back();
+    
+    // 🔄 AUTOMATIC REFRESH: Refresh sleep statistics after alarm creation/update
+    debugPrint('🔄 Refreshing sleep statistics after alarm save...');
+    if (Get.isRegistered<SleepStatisticsController>()) {
+      final statsController = Get.find<SleepStatisticsController>();
+      await statsController.loadSleepStatistics();
+      debugPrint('✅ Sleep statistics refreshed successfully');
+    }
+    
+    // Show success message
+    Get.snackbar(
+      'Alarm Saved',
+      'Alarm has been saved and sleep history updated',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.green[100],
+      duration: const Duration(seconds: 2),
+    );
   }
+
+  /// Create initial sleep history entry for new alarm
+  Future<void> _createInitialSleepHistoryEntry(DateTime date, DateTime setTime) async {
+    try {
+      debugPrint('🔄 Creating initial sleep history for date: ${date.toString().substring(0, 10)}');
+      debugPrint('🔄 Set time: ${setTime.toString().substring(11, 16)}');
+      
+      // Create initial sleep history entry
+      await SleepHistoryPrefs.saveSleepHistory(
+        date: date,
+        sleepTime: setTime,
+        wakeTime: setTime, // Will be updated when alarm stops
+        totalHours: 0.0, // Will be calculated when alarm stops
+        alarmCount: 1,
+        totalAlarmDuration: 0, // Will be updated when alarm stops
+      );
+      
+      debugPrint('✅ Initial sleep history entry created');
+    } catch (e) {
+      debugPrint('❌ Error creating initial sleep history: $e');
+    }
+  }
+
+
+
+
+
+
 
   void _handleNfcSwitch(bool value) async {
     if (value) {

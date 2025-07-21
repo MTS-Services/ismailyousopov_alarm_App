@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
@@ -15,10 +13,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:alarm/alarm.dart';
 import '../../controllers/alarm/alarm_controller.dart';
-import '../../models/alarm/alarm_model.dart';
 import 'notification_service.dart';
 import 'sound_manager.dart';
-import 'dart:typed_data';
 
 @pragma('vm:entry-point')
 class AlarmBackgroundService {
@@ -27,7 +23,6 @@ class AlarmBackgroundService {
 
   static bool _isInitializing = false;
   static bool _isInitialized = false;
-  static int? _activeAlarmId;
   static AudioPlayer? _fallbackPlayer;
   static Timer? _serviceCleanupTimer;
   static Timer? _serviceHealthCheckTimer;
@@ -329,7 +324,6 @@ class AlarmBackgroundService {
 
       if (await isNativeNotificationActive(alarmId)) {
         debugPrint('Native notification already active for alarm ID: $alarmId');
-        _activeAlarmId = alarmId;
         if (Get.isRegistered<AlarmController>()) {
           final alarmController = Get.find<AlarmController>();
           alarmController.activeAlarmId.value = alarmId;
@@ -359,7 +353,6 @@ class AlarmBackgroundService {
           });
 
           if (success) {
-            _activeAlarmId = alarmId;
             if (Get.isRegistered<AlarmController>()) {
               final alarmController = Get.find<AlarmController>();
               alarmController.activeAlarmId.value = alarmId;
@@ -468,8 +461,10 @@ class AlarmBackgroundService {
         'forceStart': true,
       });
 
-      _activeAlarmId = alarmId;
-      alarmController.activeAlarmId.value = alarmId;
+      if (Get.isRegistered<AlarmController>()) {
+        final alarmController = Get.find<AlarmController>();
+        alarmController.activeAlarmId.value = alarmId;
+      }
 
       startServiceHealthCheck();
 
@@ -504,7 +499,6 @@ class AlarmBackgroundService {
         await prefs.setBool('flutter.using_native_notification', true);
         await prefs.setString('flutter.notification_handler', 'native');
 
-        _activeAlarmId = alarmId;
         if (Get.isRegistered<AlarmController>()) {
           final alarmController = Get.find<AlarmController>();
           alarmController.activeAlarmId.value = alarmId;
@@ -532,7 +526,6 @@ class AlarmBackgroundService {
 
           if (success) {
             debugPrint('Native fallback service started successfully');
-            _activeAlarmId = alarmId;
             if (Get.isRegistered<AlarmController>()) {
               final alarmController = Get.find<AlarmController>();
               alarmController.activeAlarmId.value = alarmId;
@@ -550,7 +543,6 @@ class AlarmBackgroundService {
 
       await NotificationService.showFallbackAlarmNotification(alarmId, soundId);
 
-      _activeAlarmId = alarmId;
       if (Get.isRegistered<AlarmController>()) {
         final alarmController = Get.find<AlarmController>();
         alarmController.activeAlarmId.value = alarmId;
@@ -1236,7 +1228,6 @@ class AlarmBackgroundService {
 
           if (success) {
             debugPrint('Native alarm service started successfully');
-            _activeAlarmId = alarmId;
             if (Get.isRegistered<AlarmController>()) {
               final alarmController = Get.find<AlarmController>();
               alarmController.activeAlarmId.value = alarmId;
@@ -1282,7 +1273,6 @@ class AlarmBackgroundService {
         'forceStart': true,
       });
 
-      _activeAlarmId = alarmId;
       if (Get.isRegistered<AlarmController>()) {
         final alarmController = Get.find<AlarmController>();
         alarmController.activeAlarmId.value = alarmId;
@@ -1356,8 +1346,6 @@ class AlarmBackgroundService {
       await prefs.remove('flutter.alarm_start_time');
       await prefs.remove('flutter.using_fallback_alarm');
       await prefs.remove('flutter.using_native_notification');
-
-      _activeAlarmId = null;
 
       try {
         if (Get.isRegistered<AlarmController>()) {
@@ -1892,7 +1880,6 @@ class AlarmBackgroundService {
         final alarmData = await getActiveAlarmData();
         if (alarmData != null) {
           final int alarmId = alarmData['alarmId'];
-          final int soundId = alarmData['soundId'];
 
           if (Get.isRegistered<AlarmController>()) {
             final alarmController = Get.find<AlarmController>();

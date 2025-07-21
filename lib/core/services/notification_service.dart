@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:alarmapp/core/constants/asset_constants.dart';
 import 'package:alarmapp/core/services/sound_manager.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
@@ -508,44 +507,7 @@ class NotificationService {
     }
   }
 
-  /// Ensures all required notification channels exist with improved settings
-  static Future<void> _ensureRequiredChannelsExist() async {
-    try {
-      AndroidNotificationChannel foregroundChannel = AndroidNotificationChannel(
-        'alarm_foreground_service',
-        'Alarm Service Channel',
-        description: 'Used for alarm foreground service',
-        importance: Importance.max,
-        playSound: false,
-        showBadge: true,
-        enableLights: true,
-        enableVibration: false,
-        ledColor: const Color.fromARGB(255, 255, 0, 0),
-      );
 
-      AndroidNotificationChannel fallbackChannel = AndroidNotificationChannel(
-        'alarm_fallback_channel',
-        'Alarm Fallback Channel',
-        description: 'Used when background service fails',
-        importance: Importance.max,
-        playSound: false,
-        enableVibration: false,
-        enableLights: true,
-        ledColor: const Color.fromARGB(255, 255, 0, 0),
-      );
-
-      final plugin =
-          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-
-      if (plugin != null) {
-        await plugin.createNotificationChannel(foregroundChannel);
-        await plugin.createNotificationChannel(fallbackChannel);
-      }
-    } catch (e) {
-      debugPrint('Error creating notification channels: $e');
-    }
-  }
 
   /// Cleans up old notification channels safely while preserving important ones
   static Future<void> _cleanupOldNotificationChannels() async {

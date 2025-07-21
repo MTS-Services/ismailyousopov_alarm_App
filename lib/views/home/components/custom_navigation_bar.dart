@@ -68,7 +68,7 @@ class CustomNavigationBar extends StatelessWidget {
                     icon: Icons.query_stats_outlined,
                     size: 28,
                     onTap: () => Get.toNamed(AppConstants.sleepHistory),
-                  ),
+                  ),  /// al problem hare
                   buildNavItem(
                     icon: FontAwesomeIcons.bars,
                     size: 22,

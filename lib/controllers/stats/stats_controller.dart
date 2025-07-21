@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/database/database_helper.dart';
+import '../../core/shared_preferences/shared_prefs_manager.dart';
 
 class SleepStatisticsController extends GetxController {
   final DatabaseHelper _dbHelper;
@@ -10,8 +11,8 @@ class SleepStatisticsController extends GetxController {
       <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> lastWeekSleepData =
       <Map<String, dynamic>>[].obs;
-  final RxString thisWeekTotalHours = "0.00".obs;
-  final RxString lastWeekTotalHours = "0.00".obs;
+  final RxString thisWeekTotalHours = "0:00".obs;
+  final RxString lastWeekTotalHours = "0:00".obs;
   final RxString thisWeekTotalAlarmDuration = "0:00".obs;
   final RxString lastWeekTotalAlarmDuration = "0:00".obs;
 
@@ -55,33 +56,56 @@ class SleepStatisticsController extends GetxController {
       debugPrint(
           'This week from: ${startOfWeek.toIso8601String()} to: ${endOfWeek.toIso8601String()}');
 
-      final sleepHistoryData =
-          await _dbHelper.getSleepHistoryRange(startOfWeek, endOfWeek);
+      // 🔄 SHAREDPREFERENCES থেকে data load করছি
+      debugPrint('🔄 Loading data from SharedPreferences for this week...');
+      final sleepHistoryData = await _loadSharedPrefsDataForWeek(startOfWeek, endOfWeek);
+      
+      debugPrint('🔄 SHAREDPREFS DATA COUNT: ${sleepHistoryData.length}');
+      for (var record in sleepHistoryData) {
+        debugPrint('🔄 SHAREDPREFS RECORD: ${record.toString()}');
+        debugPrint('🔄 Sleep Time: ${record['sleep_time']}');
+        debugPrint('🔄 Wake Time: ${record['wake_time']}');
+        debugPrint('🔄 Total Hours: ${record['total_hours']}');
+      }
+      
       for (var record in sleepHistoryData) {
         debugPrint(
             'Found record for date: ${record['date']} with hours: ${record['total_hours']} and alarm duration: ${record['total_alarm_duration']}');
       }
 
       final correctedData = _correctSleepHoursAndDuration(sleepHistoryData);
+      
+      debugPrint('🔄 CORRECTED DATA COUNT: ${correctedData.length}');
+      for (var data in correctedData) {
+        debugPrint('🔄 CORRECTED RECORD: ${data.toString()}');
+      }
+      
       final formattedData =
           _formatSleepDataForUI(correctedData, startOfWeek, endOfWeek);
+      
+      debugPrint('🔄 FORMATTED DATA COUNT: ${formattedData.length}');
+      for (var data in formattedData) {
+        debugPrint('🔄 FORMATTED RECORD: ${data.toString()}');
+        debugPrint('🔄 Time Range: ${data['timeRange']}');
+      }
+      
       thisWeekSleepData.value = formattedData;
 
       double totalHours = 0;
       int totalAlarmDurationMinutes = 0;
       for (var data in correctedData) {
-        totalHours += (data['total_hours'] as double);
+        totalHours += (data['calculated_sleep_hours'] as double);
         totalAlarmDurationMinutes +=
             (data['total_alarm_duration'] as int? ?? 0);
       }
       thisWeekTotalHours.value = _formatHoursMinutes(totalHours);
       thisWeekTotalAlarmDuration.value =
           _formatDurationMinutes(totalAlarmDurationMinutes);
-      debugPrint('This week total hours calculated: $totalHours');
+      debugPrint('🔄 This week total hours calculated: $totalHours');
       debugPrint(
-          'This week total alarm duration: $totalAlarmDurationMinutes minutes');
+          '🔄 This week total alarm duration: $totalAlarmDurationMinutes minutes');
     } catch (e) {
-      debugPrint('Error loading this week data: $e');
+      debugPrint('❌ Error loading this week data: $e');
       thisWeekSleepData.value = _generatePlaceholderData(true);
     }
   }
@@ -98,9 +122,10 @@ class SleepStatisticsController extends GetxController {
       debugPrint(
           'Loading last week data from ${startOfLastWeek.toIso8601String()} to ${endOfLastWeek.toIso8601String()}');
 
-      final sleepHistoryData =
-          await _dbHelper.getSleepHistoryRange(startOfLastWeek, endOfLastWeek);
-      debugPrint('Last week sleep records found: ${sleepHistoryData.length}');
+      // 🔄 SHAREDPREFERENCES থেকে data load করছি
+      debugPrint('🔄 Loading data from SharedPreferences for last week...');
+      final sleepHistoryData = await _loadSharedPrefsDataForWeek(startOfLastWeek, endOfLastWeek);
+      debugPrint('🔄 SHAREDPREFS LAST WEEK DATA COUNT: ${sleepHistoryData.length}');
 
       final correctedData = _correctSleepHoursAndDuration(sleepHistoryData);
       final formattedData =
@@ -109,23 +134,101 @@ class SleepStatisticsController extends GetxController {
       double totalHours = 0;
       int totalAlarmDurationMinutes = 0;
       for (var data in correctedData) {
-        totalHours += (data['total_hours'] as double);
+        totalHours += (data['calculated_sleep_hours'] as double);
         totalAlarmDurationMinutes +=
             (data['total_alarm_duration'] as int? ?? 0);
       }
       lastWeekTotalHours.value = _formatHoursMinutes(totalHours);
       lastWeekTotalAlarmDuration.value =
           _formatDurationMinutes(totalAlarmDurationMinutes);
-      debugPrint('Last week total hours calculated: $totalHours');
+      debugPrint('🔄 Last week total hours calculated: $totalHours');
       debugPrint(
-          'Last week total alarm duration: $totalAlarmDurationMinutes minutes');
+          '🔄 Last week total alarm duration: $totalAlarmDurationMinutes minutes');
     } catch (e) {
-      debugPrint('Error loading last week data: $e');
+      debugPrint('❌ Error loading last week data: $e');
       lastWeekSleepData.value = _generatePlaceholderData(false);
     }
   }
 
-  /// sleep hours and durations based on actual timestamps
+  /// Load SharedPreferences data for a specific week range
+  Future<List<Map<String, dynamic>>> _loadSharedPrefsDataForWeek(DateTime startDate, DateTime endDate) async {
+    try {
+      debugPrint('🔄 Loading SharedPreferences data from ${startDate.toIso8601String()} to ${endDate.toIso8601String()}');
+      
+      final List<Map<String, dynamic>> weekData = [];
+      
+      // Get data for each day in the week
+      for (int i = 0; i < 7; i++) {
+        final currentDate = startDate.add(Duration(days: i));
+        final dayHistory = await SharedPrefsManager.getSleepHistoryForDate(currentDate);
+        
+        if (dayHistory.isNotEmpty) {
+          // Get the latest entry for this day
+          final latestEntry = dayHistory.last;
+          
+          // Convert SharedPreferences format to database format
+          final convertedEntry = {
+            'date': latestEntry['date'],
+            'sleep_time': latestEntry['sleepTime'],
+            'wake_time': latestEntry['wakeTime'], // Can be null for partial entries
+            'total_hours': latestEntry['totalHours'],
+            'alarm_count': latestEntry['alarmCount'],
+            'total_alarm_duration': latestEntry['totalAlarmDuration'],
+            'is_partial': latestEntry['isPartial'] ?? false,
+          };
+          
+          weekData.add(convertedEntry);
+          debugPrint('🔄 SHAREDPREFS ENTRY: ${convertedEntry.toString()}');
+        }
+      }
+      
+      // 🔄 ALSO LOAD FROM DATABASE AS BACKUP
+      debugPrint('🔄 Also loading from database as backup...');
+      final databaseData = await _dbHelper.getSleepHistoryRange(startDate, endDate);
+      debugPrint('🔄 DATABASE DATA COUNT: ${databaseData.length}');
+      
+      // Merge database data with SharedPreferences data
+      for (var dbRecord in databaseData) {
+        final dbDate = DateTime.parse(dbRecord['date']);
+        final dbDateKey = _formatDateKey(dbDate);
+        
+        // Check if we already have this date from SharedPreferences
+        bool alreadyExists = false;
+        for (var spRecord in weekData) {
+          final spDate = DateTime.parse(spRecord['date']);
+          final spDateKey = _formatDateKey(spDate);
+          if (spDateKey == dbDateKey) {
+            alreadyExists = true;
+            break;
+          }
+        }
+        
+        if (!alreadyExists) {
+          // Add database record if not already in SharedPreferences
+          final convertedDbEntry = {
+            'date': dbRecord['date'],
+            'sleep_time': dbRecord['sleep_time'],
+            'wake_time': dbRecord['wake_time'],
+            'total_hours': dbRecord['total_hours'],
+            'alarm_count': dbRecord['alarm_count'],
+            'total_alarm_duration': dbRecord['total_alarm_duration'],
+            'is_partial': false, // Database entries are always complete
+          };
+          
+          weekData.add(convertedDbEntry);
+          debugPrint('🔄 ADDED DATABASE ENTRY: ${convertedDbEntry.toString()}');
+        }
+      }
+      
+      debugPrint('🔄 Total entries found (SharedPreferences + Database): ${weekData.length}');
+      return weekData;
+    } catch (e) {
+      debugPrint('❌ Error loading SharedPreferences data: $e');
+      return [];
+    }
+  }
+
+  /// Calculate sleep hours and durations based on actual timestamps with proper midnight crossing
   List<Map<String, dynamic>> _correctSleepHoursAndDuration(
       List<Map<String, dynamic>> sleepHistoryData) {
     List<Map<String, dynamic>> correctedData = [];
@@ -133,21 +236,56 @@ class SleepStatisticsController extends GetxController {
     for (var record in sleepHistoryData) {
       final correctedRecord = Map<String, dynamic>.from(record);
       final sleepTime = DateTime.parse(record['sleep_time']);
-      final wakeTime = DateTime.parse(record['wake_time']);
+      final wakeTime = record['wake_time'] != null ? DateTime.parse(record['wake_time']) : null;
+      final isPartial = record['is_partial'] ?? false;
 
-      final durationInMinutes = wakeTime.difference(sleepTime).inMinutes;
-      final durationInHours = durationInMinutes / 60.0;
+      // Calculate sleep duration with proper midnight crossing handling
+      double sleepDurationHours = _calculateSleepDuration(sleepTime, wakeTime);
+      
+      // Keep the original alarm duration separate from sleep duration
+      final alarmDuration = record['total_alarm_duration'] ?? 0;
 
-      correctedRecord['total_alarm_duration'] = durationInMinutes;
-      correctedRecord['total_hours'] = durationInHours;
+      correctedRecord['calculated_sleep_hours'] = sleepDurationHours;
+      correctedRecord['total_alarm_duration'] = alarmDuration; // Keep original alarm duration
 
-      debugPrint(
-          'Corrected record: Sleep ${sleepTime.toString().substring(11, 16)}, Wake ${wakeTime.toString().substring(11, 16)}, Hours: $durationInHours, Duration: $durationInMinutes min');
+      if (isPartial) {
+        debugPrint(
+            'Partial record: Sleep ${sleepTime.toString().substring(11, 16)}, Wake: Not set yet, Sleep Hours: $sleepDurationHours, Alarm Duration: $alarmDuration min');
+      } else {
+        debugPrint(
+            'Complete record: Sleep ${sleepTime.toString().substring(11, 16)}, Wake ${wakeTime?.toString().substring(11, 16) ?? 'null'}, Sleep Hours: $sleepDurationHours, Alarm Duration: $alarmDuration min');
+      }
 
       correctedData.add(correctedRecord);
     }
 
     return correctedData;
+  }
+
+  /// Calculate sleep duration with proper midnight crossing handling
+  double _calculateSleepDuration(DateTime sleepTime, DateTime? wakeTime) {
+    // If wake time is null (partial entry), return 0
+    if (wakeTime == null) {
+      return 0.0;
+    }
+    
+    DateTime adjustedWakeTime = wakeTime;
+    
+    // If wake time is before sleep time, it means we crossed midnight
+    if (wakeTime.isBefore(sleepTime)) {
+      adjustedWakeTime = wakeTime.add(const Duration(days: 1));
+    }
+    
+    final durationInMinutes = adjustedWakeTime.difference(sleepTime).inMinutes;
+    final durationInHours = durationInMinutes / 60.0;
+    
+    // Ensure we don't have negative or unreasonable values
+    if (durationInHours < 0 || durationInHours > 24) {
+      debugPrint('Warning: Unreasonable sleep duration calculated: $durationInHours hours');
+      return 0.0;
+    }
+    
+    return durationInHours;
   }
 
   /// format sleep data to be used in ui
@@ -173,6 +311,7 @@ class SleepStatisticsController extends GetxController {
         'alarmCount': 0,
         'alarmDuration': 0,
         'formattedAlarmDuration': '0:00',
+        'sleepHours': 0.0,
       };
     }
 
@@ -187,17 +326,20 @@ class SleepStatisticsController extends GetxController {
       }
 
       final sleepTime = DateTime.parse(record['sleep_time']);
-      final wakeTime = DateTime.parse(record['wake_time']);
+      final wakeTime = record['wake_time'] != null ? DateTime.parse(record['wake_time']) : null;
       final alarmCount = record['alarm_count'] ?? 0;
       final alarmDuration = record['total_alarm_duration'] ?? 0;
-      final totalHours = record['total_hours'] as double;
+      final sleepHours = record['calculated_sleep_hours'] as double? ?? 0.0;
+      final isPartial = record['is_partial'] ?? false;
 
       final formattedSleepTime = DateFormat('HH:mm').format(sleepTime);
-      final formattedWakeTime = DateFormat('HH:mm').format(wakeTime);
+      final formattedWakeTime = wakeTime != null ? DateFormat('HH:mm').format(wakeTime) : 'Not set';
 
       dayData[dateKey] = {
         'day': _getWeekdayName(date.weekday),
-        'timeRange': 'Set $formattedSleepTime / Off $formattedWakeTime = ${_formatHoursMinutes(totalHours)}h',
+        'timeRange': isPartial 
+            ? 'Set $formattedSleepTime / Wake $formattedWakeTime = ${_formatHoursMinutes(sleepHours)}h (Alarm Active)'
+            : 'Set $formattedSleepTime / Off $formattedWakeTime = ${_formatHoursMinutes(sleepHours)}h',
         'date': date,
         'backgroundColor': date.day == DateTime.now().day
             ? Get.theme.primaryColor
@@ -208,7 +350,7 @@ class SleepStatisticsController extends GetxController {
         'alarmCount': alarmCount,
         'alarmDuration': alarmDuration,
         'formattedAlarmDuration': _formatDurationMinutes(alarmDuration),
-        'totalHours': totalHours,
+        'sleepHours': sleepHours,
       };
     }
 
@@ -301,6 +443,7 @@ class SleepStatisticsController extends GetxController {
         'alarmCount': 0,
         'alarmDuration': 0,
         'formattedAlarmDuration': '0:00',
+        'sleepHours': 0.0,
       });
     }
 
@@ -336,18 +479,18 @@ class SleepStatisticsController extends GetxController {
         final date = DateTime.parse(record['date']);
         final sleepTime = DateTime.parse(record['sleep_time']);
         final wakeTime = DateTime.parse(record['wake_time']);
-        final hours = record['total_hours'] as double;
+        final hours = record['calculated_sleep_hours'] as double? ?? 0.0;
         final alarmDuration = record['total_alarm_duration'] as int? ?? 0;
 
         totalHours += hours;
         totalAlarmDuration += alarmDuration;
 
         debugPrint(
-            'Date: ${date.toString().substring(0, 10)}, Sleep: ${sleepTime.toString().substring(11, 16)}, Wake: ${wakeTime.toString().substring(11, 16)}, Hours: $hours, Alarms: ${record['alarm_count']}, Alarm Duration: $alarmDuration min');
+            'Date: ${date.toString().substring(0, 10)}, Sleep: ${sleepTime.toString().substring(11, 16)}, Wake: ${wakeTime.toString().substring(11, 16)}, Sleep Hours: $hours, Alarms: ${record['alarm_count']}, Alarm Duration: $alarmDuration min');
       }
-      debugPrint('Total Hours: $totalHours');
+      debugPrint('Total Sleep Hours: $totalHours');
       debugPrint(
-          'Total Alarm Duration: ${_formatDurationMinutes(totalAlarmDuration)} (${totalAlarmDuration} min)');
+          'Total Alarm Duration: ${_formatDurationMinutes(totalAlarmDuration)} ($totalAlarmDuration min)');
       debugPrint('==========================');
     } catch (e) {
       debugPrint('Error debugging sleep records: $e');
@@ -356,8 +499,48 @@ class SleepStatisticsController extends GetxController {
 
   /// Force refresh the sleep statistics
   Future<void> refreshSleepStatistics() async {
+    try {
+      // ✅ SharedPreferences থেকে সপ্তাহের ডেটা নিন
+      final weekSummary = await SharedPrefsManager.getWeekSleepSummary();
+      
+      // UI আপডেট করুন
+      final averageHours = weekSummary['averageHours'] ?? 0.0;
+      final totalHours = weekSummary['totalHours'] ?? 0.0;
+      final bestDay = weekSummary['bestDay'] ?? '';
+      final worstDay = weekSummary['worstDay'] ?? '';
+      
+      debugPrint('Sleep statistics refreshed from SharedPreferences:');
+      debugPrint('   Average Hours: $averageHours');
+      debugPrint('   Total Hours: $totalHours');
+      debugPrint('   Best Day: $bestDay');
+      debugPrint('   Worst Day: $worstDay');
+      
+      // Also load from database for backward compatibility
+      await loadSleepStatistics();
+      update();
+    } catch (e) {
+      debugPrint('Error refreshing sleep statistics: $e');
+      // Fallback to database only
+      await loadSleepStatistics();
+      update();
+    }
+  }
+
+  /// Force refresh UI with immediate update
+  Future<void> forceRefreshUI() async {
+    debugPrint('🔄 FORCE REFRESHING UI...');
+    
+    // Clear current data
+    thisWeekSleepData.clear();
+    lastWeekSleepData.clear();
+    
+    // Reload data
     await loadSleepStatistics();
+    
+    // Force UI update
     update();
+    
+    debugPrint('✅ UI FORCE REFRESHED');
   }
 
   /// Get formatted alarm duration for display

@@ -1,6 +1,7 @@
-import 'package:alarmapp/models/alarm/alarm_model.dart';
+import 'package:alarmapp/controllers/stats/stats_controller.dart';
 import 'package:alarmapp/controllers/alarm/alarm_controller.dart';
 import 'package:alarmapp/core/services/background_service.dart';
+import 'package:alarmapp/core/shared_preferences/shared_prefs_manager.dart';
 import 'package:alarmapp/views/home/components/alarm_edit.dart';
 import 'package:alarmapp/views/home/components/alarm_history.dart';
 import 'package:alarmapp/views/home/components/alarm_set_screen.dart';
@@ -25,6 +26,7 @@ import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  Get.put(SleepStatisticsController());
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // Initialize the Alarm package
@@ -32,6 +34,10 @@ void main() async {
 
   final dbHelper = DatabaseHelper();
   await dbHelper.verifyDatabaseConnection();
+
+  // ✅ SharedPreferences ডেটা সিঙ্ক করুন
+  await SharedPrefsManager.syncAlarmDataWithDatabase();
+  await SharedPrefsManager.validateAndFixDataIntegrity();
 
   // First check if there's an active alarm before initializing service
   final prefs = await SharedPreferences.getInstance();

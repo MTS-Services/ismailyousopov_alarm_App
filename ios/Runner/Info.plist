@@ -37,6 +37,10 @@
 	<true/>
 	<key>NSUserNotificationCenterUsageDescription</key>
 	<string>We need to send you alarm notifications</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need microphone access to play alarm sounds</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>We need local network access for NFC functionality</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -70,11 +74,6 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>com.apple.developer.nfc.readersession.isotags</key>
-	<array>
-		<string>NDEF</string>
-		<string>TAG</string>
-	</array>
 	<key>com.apple.developer.nfc.readersession.felica.systemcodes</key>
 	<array>
 		<string>8005</string>
@@ -104,6 +103,11 @@
 		<string>D2760000850100</string>
 		<string>D2760000850101</string>
 		<string>00000000000000</string>
+	</array>
+	<key>com.apple.developer.nfc.readersession.isotags</key>
+	<array>
+		<string>NDEF</string>
+		<string>TAG</string>
 	</array>
 </dict>
 </plist>

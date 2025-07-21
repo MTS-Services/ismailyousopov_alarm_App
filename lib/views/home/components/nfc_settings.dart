@@ -61,7 +61,7 @@ class _NfcSettingsWidgetState extends State<NfcSettingsWidget> {
       int tempAlarmId = DateTime.now().millisecondsSinceEpoch;
 
       // Using direct navigation to avoid type issues
-      final result = await Get.to(() => AddNFCWidget(alarmId: tempAlarmId));
+      await Get.to(() => AddNFCWidget(alarmId: tempAlarmId));
 
       // Refresh state after returning
       _nfcController.checkIfNfcRegistered();

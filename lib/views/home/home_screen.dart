@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/background_service.dart';
 import 'package:alarm/alarm.dart';
 import 'package:alarm/utils/alarm_set.dart';
+import '../../core/shared_preferences/shared_prefs_manager.dart';
 
 /// Main screen displaying current time and next alarm information
 class HomeScreen extends StatefulWidget {
@@ -33,11 +34,14 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // ✅ SharedPreferences ডেটা সিঙ্ক করুন
+      await SharedPrefsManager.syncAlarmDataWithDatabase();
+      await SharedPrefsManager.validateAndFixDataIntegrity();
+      
       await alarmController.loadAlarms();
       _setupPeriodicRefresh();
 
       // Initialize background service only if needed
-      final prefs = await SharedPreferences.getInstance();
       final launchData = await AlarmBackgroundService.getAlarmLaunchData();
       final hasLaunchIntent =
           launchData != null && launchData['fromAlarm'] == true;
@@ -337,7 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const CustomDrawer(),
+      drawer: const CustomDrawer(), //no problem
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(

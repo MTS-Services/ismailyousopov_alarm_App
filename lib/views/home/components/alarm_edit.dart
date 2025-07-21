@@ -1,17 +1,17 @@
-import 'dart:io';
+
 
 import 'package:alarmapp/views/home/components/alarm_history.dart';
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../controllers/alarm/alarm_controller.dart';
+import '../../../controllers/stats/stats_controller.dart';
 import '../../../core/constants/asset_constants.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../models/alarm/alarm_model.dart';
-import '../../../core/services/notification_service.dart';
+
 
 class AlarmEditScreen extends StatefulWidget {
   const AlarmEditScreen({super.key});
@@ -107,6 +107,11 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     )?.then((_) {
       _alarmController.forceRefreshUI();
       _loadAlarms();
+      
+      // Refresh sleep statistics after alarm edit
+      if (Get.isRegistered<SleepStatisticsController>()) {
+        Get.find<SleepStatisticsController>().refreshSleepStatistics();
+      }
     });
   }
 

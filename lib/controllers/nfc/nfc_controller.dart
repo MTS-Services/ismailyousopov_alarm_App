@@ -487,10 +487,6 @@ class NFCController extends GetxController {
   /// Helper method to convert bytes to hex string with safe handling
   String _bytesToHex(List<dynamic> bytes) {
     try {
-      if (bytes is! List) {
-        return 'invalid-data';
-      }
-
       return bytes.map((e) {
         if (e is int) {
           return e.toRadixString(16).padLeft(2, '0');
