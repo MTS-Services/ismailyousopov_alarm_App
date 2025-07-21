@@ -20,12 +20,14 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alarm/alarm.dart';
+import 'controllers/local_notification/local_notification_controller.dart';
 import 'core/constants/asset_constants.dart';
 import 'core/database/database_helper.dart';
 import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  await Get.putAsync(() async => LocalNotificationController());
   Get.put(SleepStatisticsController());
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 

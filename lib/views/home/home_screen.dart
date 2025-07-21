@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/home/home_controller.dart';
 import '../../controllers/alarm/alarm_controller.dart';
+import '../../controllers/local_notification/local_notification_controller.dart';
 import '../../models/alarm/alarm_model.dart';
 import '../drawer/drawer.dart';
 import 'components/alarm_info_section.dart';
@@ -434,6 +435,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    
+    
+      floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            LocalNotificationController.to.showSimpleNotification(
+              title: 'Test Title',
+              body: 'Test Body',
+            );
+          },
+          child: const Icon(Icons.add)
+      )
+    
     );
   }
 }
