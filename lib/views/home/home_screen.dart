@@ -1,5 +1,6 @@
 import 'package:alarmapp/core/constants/asset_constants.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../controllers/home/home_controller.dart';
 import '../../controllers/alarm/alarm_controller.dart';
@@ -71,6 +72,13 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+
+
+  //volume control section
+
+
+
+  //end volume controller
   /// Checks if the app was launched from an alarm notification
   Future<void> _checkAlarmLaunchIntent() async {
     try {
@@ -252,6 +260,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     // No need to remove listeners with GetX's reactive approach
+
     super.dispose();
   }
 
@@ -357,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
+          child: Column( 
             children: [
               CustomNavigationBar(
                 onMenuTap: () => homeController.openDrawer(context),
@@ -437,15 +446,15 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     
     
-      floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            LocalNotificationController.to.showSimpleNotification(
-              title: 'Test Title',
-              body: 'Test Body',
-            );
-          },
-          child: const Icon(Icons.add)
-      )
+      // floatingActionButton: FloatingActionButton(
+      //     onPressed: () {
+      //       LocalNotificationController.to.showSimpleNotification(
+      //         title: 'Test Title',
+      //         body: 'Test Body',
+      //       );
+      //     },
+      //     child: const Icon(Icons.add)
+      // )
     
     );
   }
