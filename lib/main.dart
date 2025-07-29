@@ -16,6 +16,7 @@ import 'package:alarmapp/views/home/components/sleep_history.dart';
 import 'package:alarmapp/views/home/home_screen.dart';
 import 'package:alarmapp/views/onboarding/onboarding_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,7 +28,27 @@ import 'core/theme/app_theme.dart';
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-  await Get.putAsync(() async => LocalNotificationController());
+
+
+
+
+  // WidgetsFlutterBinding.ensureInitialized(); এর পর নিচের কোডটি যোগ করুন
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
+      .then((_) {
+    // ভলিউম বাটন লিসেনার ডিসেবল করুন
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
+  });
+
+
+
+
+
+
+
+
+
+
+  // await Get.putAsync(() async => LocalNotificationController());
   Get.put(SleepStatisticsController());
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
