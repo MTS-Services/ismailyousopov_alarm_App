@@ -16,11 +16,11 @@ import '../../models/alarm/alarm_model.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/sound_manager.dart';
 import '../../core/constants/asset_constants.dart';
+import '../../volume_lock_manager/volume_lock_manager.dart';
 import '../nfc/nfc_controller.dart';
 import '../stats/stats_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:flutter/services.dart';
-import '../../core/shared_preferences/shared_prefs_manager.dart';
 import '../../core/shared_preferences/alarm_prefs.dart';
 import '../../core/shared_preferences/sleep_history_prefs.dart';
 
@@ -29,6 +29,7 @@ class AlarmController extends GetxController {
   final AudioPlayer _audioPlayer;
   Timer? _refreshTimer;
   Timer? _alarmSoundTimer;
+  final VolumeLockManager _volumeManager = VolumeLockManager();
 
   AlarmController({
     DatabaseHelper? dbHelper,
@@ -59,7 +60,9 @@ class AlarmController extends GetxController {
     _startClockTimer();
     loadAlarms();
     _loadSavedVolume();
-    
+
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+
     // Reset today's alarms flag at midnight
     _resetTodayAlarmsAtMidnight();
 
@@ -98,11 +101,11 @@ class AlarmController extends GetxController {
     final now = DateTime.now();
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
     final timeUntilMidnight = tomorrow.difference(now);
-    
+
     Timer(timeUntilMidnight, () async {
       await _dbHelper.resetTodayAlarms();
       debugPrint('Reset is_for_today flag for all alarms at midnight');
-      
+
       // Schedule next reset for tomorrow
       _resetTodayAlarmsAtMidnight();
     });
@@ -401,7 +404,7 @@ class AlarmController extends GetxController {
       debugPrint(
         'Created new alarm with ID: $id, time: ${alarm.time}, next trigger: ${alarm.getNextAlarmTime()}',
       );
-      
+
       // 🔄 REFRESH SLEEP STATISTICS: Immediately refresh sleep statistics
       debugPrint('🔄 Refreshing sleep statistics after alarm creation...');
       if (Get.isRegistered<SleepStatisticsController>()) {
@@ -409,7 +412,7 @@ class AlarmController extends GetxController {
         await statsController.loadSleepStatistics();
         debugPrint('✅ Sleep statistics refreshed after alarm creation');
       }
-      
+
       update();
     } catch (e) {
       debugPrint('Alarm creation failed: $e');
@@ -508,12 +511,12 @@ class AlarmController extends GetxController {
 
       await loadAlarms();
       refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      
+
       // Refresh sleep statistics after alarm update
       if (Get.isRegistered<SleepStatisticsController>()) {
         await Get.find<SleepStatisticsController>().refreshSleepStatistics();
       }
-      
+
       update();
     } catch (e) {
       debugPrint('Error updating alarm: $e');
@@ -547,12 +550,12 @@ class AlarmController extends GetxController {
       // Update the UI
       await loadAlarms();
       refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      
+
       // Refresh sleep statistics after alarm deletion
       if (Get.isRegistered<SleepStatisticsController>()) {
         await Get.find<SleepStatisticsController>().refreshSleepStatistics();
       }
-      
+
       update();
 
       debugPrint('Deleted alarm with ID: $id');
@@ -599,12 +602,12 @@ class AlarmController extends GetxController {
 
       await loadAlarms();
       refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      
+
       // Refresh sleep statistics after alarm toggle
       if (Get.isRegistered<SleepStatisticsController>()) {
         await Get.find<SleepStatisticsController>().refreshSleepStatistics();
       }
-      
+
       update();
 
       debugPrint('Toggled alarm $id to ${isEnabled ? 'enabled' : 'disabled'}');
@@ -631,12 +634,12 @@ class AlarmController extends GetxController {
 
       await loadAlarms();
       refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      
+
       // Refresh sleep statistics after alarm cancellation
       if (Get.isRegistered<SleepStatisticsController>()) {
         await Get.find<SleepStatisticsController>().refreshSleepStatistics();
       }
-      
+
       update();
     } catch (e) {
       debugPrint('Error canceling alarm: $e');
@@ -686,7 +689,7 @@ class AlarmController extends GetxController {
 
       await loadAlarms();
       refreshTimestamp.value = DateTime.now().millisecondsSinceEpoch;
-      
+
       // 🔄 IMMEDIATE REFRESH: Refresh sleep statistics
       debugPrint('🔄 Refreshing sleep statistics after alarm stop...');
       if (Get.isRegistered<SleepStatisticsController>()) {
@@ -694,7 +697,7 @@ class AlarmController extends GetxController {
         await statsController.loadSleepStatistics();
         debugPrint('✅ Sleep statistics refreshed after alarm stop');
       }
-      
+
       update();
     } catch (e) {
       debugPrint('Error stopping alarm and updating state: $e');
@@ -924,6 +927,7 @@ class AlarmController extends GetxController {
     try {
       // For actual alarms (not previews), check for duplicates
       if (!isPreview && alarmId != null) {
+        _volumeManager.startLockingVolume(volume: 1.0);
         // Use the NotificationService's deduplication logic
         if (!(await NotificationService.markAlarmAsActivated(alarmId))) {
           debugPrint(
@@ -1007,6 +1011,59 @@ class AlarmController extends GetxController {
       }
     } catch (e) {
       debugPrint('Error increasing alarm volume: $e');
+    }
+  }
+
+  Future<void> _resetToFixedVolume() async {
+    await _audioPlayer.setVolume(.8);
+    // await volumeController.setVolume(fixedVolume);
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.audioVolumeUp ||
+          event.logicalKey == LogicalKeyboardKey.audioVolumeDown) {
+        _resetToFixedVolume();
+        return true; // Prevent default behavior
+      }
+    }
+    return false;
+  }
+
+  Future<void> initAudioSettings() async {
+    try {
+      if (Platform.isAndroid) {
+        await _configureAndroidAudio();
+      } else if (Platform.isIOS) {
+        await _configureIOSAudio();
+      }
+    } catch (e) {
+      debugPrint('Audio configuration error: $e');
+    }
+  }
+
+  Future<void> _configureAndroidAudio() async {
+    try {
+      await const MethodChannel('audio_service').invokeMethod('setAudioMode', {
+        'contentType': 'sonification',
+        'usage': 'alarm',
+        'handleAudioFocus': false,
+        'streamType': 'alarm',
+      });
+    } catch (e) {
+      debugPrint('Android audio config error: $e');
+    }
+  }
+
+  Future<void> _configureIOSAudio() async {
+    try {
+      await const MethodChannel('audio_service')
+          .invokeMethod('setAudioCategory', {
+        'category': 'playback',
+        'options': ['mixWithOthers'],
+      });
+    } catch (e) {
+      debugPrint('iOS audio config error: $e');
     }
   }
 
@@ -1160,45 +1217,49 @@ class AlarmController extends GetxController {
 
     try {
       final now = DateTime.now();
-      
+
       // 🔍 DEBUG: Track set time recording
       debugPrint('🕐 ALARM SET TIME RECORDING:');
       debugPrint('   Alarm ID: ${alarm.id}');
-      debugPrint('   Set Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)}');
+      debugPrint(
+          '   Set Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)}');
       debugPrint('   Alarm Time: ${DateFormat('HH:mm').format(alarm.time)}');
       debugPrint('   Is Repeating: ${alarm.isRepeating}');
       debugPrint('   Days Active: ${alarm.daysActive}');
-      
+
       // Update alarm's set time in database
       await _dbHelper.updateAlarmTimes(alarm.id!, setTime: now);
-      
+
       // Update the alarm model with current set time and mark for today
       alarm.lastSetTime = now;
       alarm.isForToday = true;
-      
+
       // Update the alarm in database to mark it as for today
       await _dbHelper.updateAlarm(alarm);
-      
+
       // ✅ SharedPreferences এ সেভ করুন
       await AlarmPrefs.saveAlarmData(
         alarmId: alarm.id!,
-        setTime: now,        // যখন alarm set করছেন (যেমন: 10:30)
-        stopTime: null,      // এখনও বন্ধ হয়নি
+        setTime: now, // যখন alarm set করছেন (যেমন: 10:30)
+        stopTime: null, // এখনও বন্ধ হয়নি
         isRepeating: alarm.isRepeating,
         daysActive: alarm.daysActive,
       );
-      
+
       // 🔄 ADDITIONAL: Save wake time (alarm time) separately
       await _saveWakeTime(alarm.id!, alarm.time);
-      
+
       // 🔄 PARTIAL SLEEP HISTORY: Create partial entry when alarm is set
       debugPrint('🔄 Creating partial sleep history entry...');
       final today = DateTime(now.year, now.month, now.day);
-      
+
       // Calculate estimated sleep time for partial entry
-      final estimatedSleepTime = alarm.time.subtract(const Duration(hours: 7, minutes: 30));
-      final sleepTime = estimatedSleepTime.isBefore(now) ? estimatedSleepTime : now.subtract(const Duration(hours: 7, minutes: 30));
-      
+      final estimatedSleepTime =
+          alarm.time.subtract(const Duration(hours: 7, minutes: 30));
+      final sleepTime = estimatedSleepTime.isBefore(now)
+          ? estimatedSleepTime
+          : now.subtract(const Duration(hours: 7, minutes: 30));
+
       // 🔄 IMPROVED: Use actual wake time (alarm time) instead of null
       await SleepHistoryPrefs.savePartialSleepHistoryWithWakeTime(
         date: today,
@@ -1206,23 +1267,22 @@ class AlarmController extends GetxController {
         wakeTime: alarm.time, // Actual wake time (alarm time)
         alarmCount: 1,
       );
-      
+
       // 🔍 DEBUG: Verify database update
       debugPrint('✅ DATABASE & SHAREDPREFS UPDATED:');
       debugPrint('   last_set_time: ${alarm.lastSetTime?.toIso8601String()}');
       debugPrint('   is_for_today: ${alarm.isForToday}');
-      debugPrint('   partial_sleep_time: ${DateFormat('HH:mm').format(sleepTime)}');
-      
-      debugPrint('Alarm set time recorded: ${DateFormat('HH:mm:ss').format(now)}');
-      debugPrint('Partial sleep history created with sleep time: ${DateFormat('HH:mm').format(sleepTime)}');
-      
+      debugPrint(
+          '   partial_sleep_time: ${DateFormat('HH:mm').format(sleepTime)}');
+
+      debugPrint(
+          'Alarm set time recorded: ${DateFormat('HH:mm:ss').format(now)}');
+      debugPrint(
+          'Partial sleep history created with sleep time: ${DateFormat('HH:mm').format(sleepTime)}');
     } catch (e) {
       debugPrint('❌ Error recording alarm set time: $e');
     }
   }
-
-
-
 
   /// alarm stop time
   Future<void> recordAlarmStopTime(AlarmModel alarm) async {
@@ -1231,114 +1291,128 @@ class AlarmController extends GetxController {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      
+
       // 🔍 DEBUG: Track stop time recording
       debugPrint('⏰ ALARM STOP TIME RECORDING:');
       debugPrint('   Alarm ID: ${alarm.id}');
-      debugPrint('   Stop Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)}');
+      debugPrint(
+          '   Stop Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)}');
       debugPrint('   Today Date: ${DateFormat('yyyy-MM-dd').format(today)}');
-      
+
       // Update alarm's stop time in database
       await _dbHelper.updateAlarmTimes(alarm.id!, stopTime: now);
-      
+
       // Update the alarm model
       alarm.lastStopTime = now;
       alarm.isForToday = false;
       await _dbHelper.updateAlarm(alarm);
-      
+
       // ✅ SharedPreferences এ আপডেট করুন
       await AlarmPrefs.updateAlarmStopTime(alarm.id!, now);
-      
+
       // 🔍 DEBUG: Verify alarm model update
       debugPrint('✅ ALARM MODEL & SHAREDPREFS UPDATED:');
       debugPrint('   last_stop_time: ${alarm.lastStopTime?.toIso8601String()}');
       debugPrint('   is_for_today: ${alarm.isForToday}');
-      
+
       // 🔧 IMPROVED SLEEP TIME CALCULATION
       // Method 1: Try to get user's actual sleep time from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final userSleepTimeKey = 'user_sleep_time_${DateFormat('yyyy-MM-dd').format(today)}';
+      final userSleepTimeKey =
+          'user_sleep_time_${DateFormat('yyyy-MM-dd').format(today)}';
       final userSleepTimeString = prefs.getString(userSleepTimeKey);
-      
+
       DateTime? sleepTime;
-      
+
       if (userSleepTimeString != null) {
         // Use user's actual sleep time if available
         try {
           sleepTime = DateTime.parse(userSleepTimeString);
-          debugPrint('✅ Using user-provided sleep time: ${DateFormat('HH:mm').format(sleepTime!)}');
+          debugPrint(
+              '✅ Using user-provided sleep time: ${DateFormat('HH:mm').format(sleepTime!)}');
         } catch (e) {
           debugPrint('❌ Error parsing user sleep time: $e');
         }
       }
-      
+
       if (sleepTime == null) {
         // Method 2: Intelligent estimation based on alarm time
         // Calculate sleep time as 7.5 hours before alarm time
-        final estimatedSleepTime = alarm.time.subtract(const Duration(hours: 7, minutes: 30));
-        
+        final estimatedSleepTime =
+            alarm.time.subtract(const Duration(hours: 7, minutes: 30));
+
         // 🔧 FIXED LOGIC: Use the earlier of estimated sleep time or actual set time
         // This ensures we don't have sleep time after wake time
         if (alarm.lastSetTime != null) {
-          sleepTime = estimatedSleepTime.isBefore(alarm.lastSetTime!) 
-              ? estimatedSleepTime 
+          sleepTime = estimatedSleepTime.isBefore(alarm.lastSetTime!)
+              ? estimatedSleepTime
               : alarm.lastSetTime!;
         } else {
           sleepTime = estimatedSleepTime;
         }
-        
-        debugPrint('📊 Using estimated sleep time: ${DateFormat('HH:mm').format(sleepTime)}');
+
+        debugPrint(
+            '📊 Using estimated sleep time: ${DateFormat('HH:mm').format(sleepTime)}');
       }
-      
+
       // 🔧 ADDITIONAL VALIDATION: Ensure sleep time is before wake time
       if (sleepTime.isAfter(now)) {
         debugPrint('⚠️ WARNING: Sleep time is after wake time, adjusting...');
         // If sleep time is after wake time, use a reasonable default
         sleepTime = now.subtract(const Duration(hours: 7, minutes: 30));
-        debugPrint('📊 Adjusted sleep time to: ${DateFormat('HH:mm').format(sleepTime)}');
+        debugPrint(
+            '📊 Adjusted sleep time to: ${DateFormat('HH:mm').format(sleepTime)}');
       }
-      
+
       // 🔧 FINAL VALIDATION: Ensure we have a reasonable sleep duration
       final initialSleepDurationMinutes = now.difference(sleepTime).inMinutes;
-      if (initialSleepDurationMinutes <= 0 || initialSleepDurationMinutes > 24 * 60) {
-        debugPrint('⚠️ WARNING: Unreasonable sleep duration ($initialSleepDurationMinutes minutes), using default...');
+      if (initialSleepDurationMinutes <= 0 ||
+          initialSleepDurationMinutes > 24 * 60) {
+        debugPrint(
+            '⚠️ WARNING: Unreasonable sleep duration ($initialSleepDurationMinutes minutes), using default...');
         // Use a reasonable default: 7.5 hours before wake time
         sleepTime = now.subtract(const Duration(hours: 7, minutes: 30));
-        debugPrint('📊 Using default sleep time: ${DateFormat('HH:mm').format(sleepTime)}');
+        debugPrint(
+            '📊 Using default sleep time: ${DateFormat('HH:mm').format(sleepTime)}');
       }
-      
+
       // 🔍 DEBUG: Calculate sleep duration
       debugPrint('📊 SLEEP DURATION CALCULATION (IMPROVED):');
-      debugPrint('   Alarm Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(alarm.time)}');
-      debugPrint('   Set Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(alarm.lastSetTime!)}');
-      debugPrint('   Final Sleep Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(sleepTime)}');
-      debugPrint('   Wake Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)}');
-      
+      debugPrint(
+          '   Alarm Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(alarm.time)}');
+      debugPrint(
+          '   Set Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(alarm.lastSetTime!)}');
+      debugPrint(
+          '   Final Sleep Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(sleepTime)}');
+      debugPrint(
+          '   Wake Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)}');
+
       // Calculate actual sleep duration
       final sleepDurationMinutes = now.difference(sleepTime).inMinutes;
       final sleepDurationHours = sleepDurationMinutes / 60.0;
-      
+
       debugPrint('   Duration Minutes: $sleepDurationMinutes');
       debugPrint('   Duration Hours: ${sleepDurationHours.toStringAsFixed(2)}');
-      
+
       // Get today's alarm count
       final todayAlarms = await _dbHelper.getTodayAlarms();
       final alarmCount = todayAlarms.length;
-      
+
       debugPrint('📅 TODAY ALARMS:');
       debugPrint('   Total Alarms Today: $alarmCount');
-      
+
       // Calculate total alarm duration for today
       int totalAlarmDuration = 0;
       for (var alarmMap in todayAlarms) {
         final currentAlarm = AlarmModel.fromMap(alarmMap);
-        if (currentAlarm.lastSetTime != null && currentAlarm.lastStopTime != null) {
+        if (currentAlarm.lastSetTime != null &&
+            currentAlarm.lastStopTime != null) {
           totalAlarmDuration += currentAlarm.calculateActualDuration();
         }
       }
-      
+
       debugPrint('   Total Alarm Duration: $totalAlarmDuration minutes');
-      
+
       // Insert or update sleep history with actual times
       await _dbHelper.insertSleepHistory(
         date: today,
@@ -1348,12 +1422,14 @@ class AlarmController extends GetxController {
         alarmCount: alarmCount,
         totalAlarmDuration: totalAlarmDuration,
       );
-      
+
       // ✅ Sleep history SharedPreferences এ সেভ করুন
       // Check if we have a partial entry to update
-      final existingHistory = await SleepHistoryPrefs.getSleepHistoryForDate(today);
-      final hasPartialEntry = existingHistory.any((entry) => entry['isPartial'] == true);
-      
+      final existingHistory =
+          await SleepHistoryPrefs.getSleepHistoryForDate(today);
+      final hasPartialEntry =
+          existingHistory.any((entry) => entry['isPartial'] == true);
+
       if (hasPartialEntry) {
         // Update existing partial entry
         debugPrint('🔄 Updating existing partial sleep history entry...');
@@ -1375,7 +1451,7 @@ class AlarmController extends GetxController {
           totalAlarmDuration: totalAlarmDuration,
         );
       }
-      
+
       // 🔍 DEBUG: Verify sleep history creation
       debugPrint('💾 SLEEP HISTORY CREATED (DB & SHAREDPREFS):');
       debugPrint('   Date: ${DateFormat('yyyy-MM-dd').format(today)}');
@@ -1384,13 +1460,13 @@ class AlarmController extends GetxController {
       debugPrint('   Total Hours: ${sleepDurationHours.toStringAsFixed(2)}');
       debugPrint('   Alarm Count: $alarmCount');
       debugPrint('   Total Alarm Duration: $totalAlarmDuration minutes');
-      
+
       debugPrint('✅ Sleep History Updated:');
       debugPrint('   Set: ${DateFormat('HH:mm:ss').format(sleepTime)}');
       debugPrint('   Off: ${DateFormat('HH:mm:ss').format(now)}');
       debugPrint('   Duration: ${sleepDurationHours.toStringAsFixed(2)} hours');
       debugPrint('   Alarm Count: $alarmCount');
-      
+
       // 🔄 IMMEDIATE REFRESH: Sleep statistics refresh করুন
       debugPrint('🔄 Refreshing sleep statistics immediately...');
       if (Get.isRegistered<SleepStatisticsController>()) {
@@ -1400,14 +1476,10 @@ class AlarmController extends GetxController {
       } else {
         debugPrint('⚠️ SleepStatisticsController not registered');
       }
-      
     } catch (e) {
       debugPrint('❌ Error recording alarm stop time: $e');
     }
   }
-
-
-
 
   /// Check for active alarms and update the hasActiveAlarm value
   /// Also updates shouldShowStopScreen to indicate if the stop alarm screen should be shown
@@ -1462,11 +1534,11 @@ class AlarmController extends GetxController {
   Future<void> resetAlarmSystem() async {
     try {
       debugPrint('🔄 RESETTING ALARM SYSTEM - Fixing all issues...');
-      
+
       // 1. Stop all current alarms
       stopAlarmSound();
       await AlarmBackgroundService.emergencyStopAllAlarms();
-      
+
       // 2. Clear all stored data
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('flutter.active_alarm_id');
@@ -1477,22 +1549,22 @@ class AlarmController extends GetxController {
       await prefs.remove('flutter.using_native_notification');
       await prefs.remove('flutter.notification_handler');
       await prefs.remove('scheduled_alarms');
-      
+
       // 3. Clear alarm trigger timestamps
       final keys = prefs.getKeys();
       for (final key in keys) {
-        if (key.startsWith('alarm_last_trigger_') || 
+        if (key.startsWith('alarm_last_trigger_') ||
             key.startsWith('alarm_last_activated_')) {
           await prefs.remove(key);
         }
       }
-      
+
       // 4. Reset controller state
       activeAlarmId.value = -1;
       shouldShowStopScreen.value = false;
       hasActiveAlarm.value = false;
       isAlarmActive.value = false;
-      
+
       // 5. Stop all Flutter Alarm package alarms
       try {
         Alarm.stopAll();
@@ -1500,10 +1572,10 @@ class AlarmController extends GetxController {
       } catch (e) {
         debugPrint('⚠️ Error stopping Flutter alarms: $e');
       }
-      
+
       // 6. Reload alarms from database
       await loadAlarms();
-      
+
       // 7. Show success message
       Get.snackbar(
         '✅ Alarm System Reset',
@@ -1512,9 +1584,8 @@ class AlarmController extends GetxController {
         backgroundColor: Colors.green[100],
         duration: const Duration(seconds: 5),
       );
-      
+
       debugPrint('✅ ALARM SYSTEM RESET COMPLETED - All issues fixed!');
-      
     } catch (e) {
       debugPrint('❌ Error resetting alarm system: $e');
       Get.snackbar(
@@ -1530,25 +1601,25 @@ class AlarmController extends GetxController {
   Future<void> quickFixAlarms() async {
     try {
       debugPrint('🔧 Applying quick fix for alarm issues...');
-      
+
       // Stop current alarm if any
       if (activeAlarmId.value > 0) {
         await stopAlarm(activeAlarmId.value);
       }
-      
+
       // Clear active alarm data
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('flutter.active_alarm_id');
       await prefs.remove('flutter.active_alarm_sound');
-      
+
       // Reset controller state
       activeAlarmId.value = -1;
       shouldShowStopScreen.value = false;
       hasActiveAlarm.value = false;
-      
+
       // Reload alarms
       await loadAlarms();
-      
+
       Get.snackbar(
         '🔧 Quick Fix Applied',
         'Alarm issues have been resolved.',
@@ -1556,7 +1627,6 @@ class AlarmController extends GetxController {
         backgroundColor: Colors.blue[100],
         duration: const Duration(seconds: 3),
       );
-      
     } catch (e) {
       debugPrint('❌ Quick fix failed: $e');
     }
@@ -1567,12 +1637,14 @@ class AlarmController extends GetxController {
     try {
       final today = DateTime(sleepTime.year, sleepTime.month, sleepTime.day);
       final prefs = await SharedPreferences.getInstance();
-      final userSleepTimeKey = 'user_sleep_time_${DateFormat('yyyy-MM-dd').format(today)}';
-      
+      final userSleepTimeKey =
+          'user_sleep_time_${DateFormat('yyyy-MM-dd').format(today)}';
+
       await prefs.setString(userSleepTimeKey, sleepTime.toIso8601String());
-      
-      debugPrint('✅ User sleep time set for ${DateFormat('yyyy-MM-dd').format(today)}: ${DateFormat('HH:mm').format(sleepTime)}');
-      
+
+      debugPrint(
+          '✅ User sleep time set for ${DateFormat('yyyy-MM-dd').format(today)}: ${DateFormat('HH:mm').format(sleepTime)}');
+
       Get.snackbar(
         '✅ Sleep Time Set',
         'Your sleep time has been recorded: ${DateFormat('HH:mm').format(sleepTime)}',
@@ -1580,7 +1652,6 @@ class AlarmController extends GetxController {
         backgroundColor: Colors.green[100],
         duration: const Duration(seconds: 3),
       );
-      
     } catch (e) {
       debugPrint('❌ Error setting user sleep time: $e');
       Get.snackbar(
@@ -1596,13 +1667,14 @@ class AlarmController extends GetxController {
   Future<DateTime?> getUserSleepTime(DateTime date) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userSleepTimeKey = 'user_sleep_time_${DateFormat('yyyy-MM-dd').format(date)}';
+      final userSleepTimeKey =
+          'user_sleep_time_${DateFormat('yyyy-MM-dd').format(date)}';
       final userSleepTimeString = prefs.getString(userSleepTimeKey);
-      
+
       if (userSleepTimeString != null) {
         return DateTime.parse(userSleepTimeString);
       }
-      
+
       return null;
     } catch (e) {
       debugPrint('❌ Error getting user sleep time: $e');
@@ -1615,10 +1687,11 @@ class AlarmController extends GetxController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final wakeTimeKey = 'alarm_wake_time_$alarmId';
-      
+
       await prefs.setString(wakeTimeKey, wakeTime.toIso8601String());
-      
-      debugPrint('✅ Wake time saved for alarm $alarmId: ${DateFormat('HH:mm').format(wakeTime)}');
+
+      debugPrint(
+          '✅ Wake time saved for alarm $alarmId: ${DateFormat('HH:mm').format(wakeTime)}');
     } catch (e) {
       debugPrint('❌ Error saving wake time: $e');
     }
@@ -1629,12 +1702,12 @@ class AlarmController extends GetxController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final wakeTimeKey = 'alarm_wake_time_$alarmId';
-      
+
       final wakeTimeString = prefs.getString(wakeTimeKey);
       if (wakeTimeString != null) {
         return DateTime.parse(wakeTimeString);
       }
-      
+
       return null;
     } catch (e) {
       debugPrint('❌ Error getting wake time: $e');
@@ -1646,21 +1719,21 @@ class AlarmController extends GetxController {
   Future<void> clearCorruptedSleepHistory() async {
     try {
       debugPrint('🧹 Clearing corrupted sleep history data...');
-      
+
       // Clear from SharedPreferences
       await SleepHistoryPrefs.clearAllSleepHistory();
-      
+
       // Clear from database
       await _dbHelper.clearAllSleepHistory();
-      
+
       // Refresh sleep statistics
       if (Get.isRegistered<SleepStatisticsController>()) {
         final statsController = Get.find<SleepStatisticsController>();
         await statsController.forceRefreshUI();
       }
-      
+
       debugPrint('✅ Corrupted sleep history cleared successfully');
-      
+
       Get.snackbar(
         '✅ Data Cleared',
         'Corrupted sleep history has been cleared.',
@@ -1668,7 +1741,6 @@ class AlarmController extends GetxController {
         backgroundColor: Colors.green[100],
         duration: const Duration(seconds: 3),
       );
-      
     } catch (e) {
       debugPrint('❌ Error clearing corrupted sleep history: $e');
       Get.snackbar(
@@ -1678,5 +1750,12 @@ class AlarmController extends GetxController {
         backgroundColor: Colors.red[100],
       );
     }
+  }
+
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    super.dispose();
   }
 }
